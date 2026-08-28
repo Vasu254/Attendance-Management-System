@@ -36,3 +36,4 @@ Default test admin credentials are created from environment variables, or `admin
 Backend is prepared for Render with `gunicorn` and `Procfile`. Set `DATABASE_URL`, `JWT_SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `CORS_ORIGINS`.
 
 Frontend is prepared for Netlify. Set `VITE_API_URL` to your deployed backend URL ending in `/api`.
+# Student-Attendance-Management-System
