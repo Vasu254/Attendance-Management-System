@@ -56,11 +56,45 @@ def attendance_summary(target_date, permission=None):
     return total, present, max(total - present, 0), percentage
 
 
+def student_progress(student, target_date=None):
+    target_date = target_date or date.today()
+    permissions = AttendancePermission.query.all()
+    eligible_dates = {
+        permission.attendance_date
+        for permission in permissions
+        if student_is_eligible(student, permission)
+    }
+    total_sessions = len(eligible_dates)
+    present_days = 0
+    if eligible_dates:
+        present_days = Attendance.query.filter(
+            Attendance.student_id == student.id,
+            Attendance.attendance_date.in_(eligible_dates),
+            Attendance.status == "PRESENT",
+        ).count()
+    today_attendance = Attendance.query.filter_by(student_id=student.id, attendance_date=target_date).first()
+    last_attendance = (
+        Attendance.query.filter_by(student_id=student.id)
+        .order_by(Attendance.attendance_date.desc(), Attendance.marked_time.desc())
+        .first()
+    )
+    percentage = round((present_days / total_sessions) * 100, 2) if total_sessions else 0
+    return {
+        "present_days": present_days,
+        "total_sessions": total_sessions,
+        "attendance_percentage": percentage,
+        "below_75": percentage < 75 if total_sessions else False,
+        "today_status": today_attendance.status if today_attendance else "NOT MARKED",
+        "last_marked_date": last_attendance.attendance_date.isoformat() if last_attendance else None,
+        "last_marked_time": last_attendance.marked_time.strftime("%H:%M") if last_attendance else None,
+    }
+
+
 @admin_bp.get("/students")
 @role_required("ADMIN")
 def list_students():
     students = apply_student_filters(Student.query.join(Student.user)).order_by(Student.created_at.desc()).all()
-    return jsonify([student.to_dict() for student in students])
+    return jsonify([{**student.to_dict(), "progress": student_progress(student)} for student in students])
 
 
 @admin_bp.post("/students")
@@ -111,7 +145,7 @@ def create_student():
 @role_required("ADMIN")
 def get_student(student_pk):
     student = Student.query.get_or_404(student_pk)
-    return jsonify(student.to_dict())
+    return jsonify({**student.to_dict(), "progress": student_progress(student)})
 
 
 @admin_bp.put("/students/<int:student_pk>")

@@ -150,6 +150,8 @@ export default function StudentManagement() {
                 <th>Course</th>
                 <th>Batch</th>
                 <th>Username</th>
+                <th>Today</th>
+                <th>Progress</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -164,6 +166,27 @@ export default function StudentManagement() {
                   <td>{student.course}</td>
                   <td>{student.batch} / {student.section}</td>
                   <td>{student.username}</td>
+                  <td>
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${student.progress?.today_status === "PRESENT" ? "bg-teal-50 text-teal-700" : "bg-orange-50 text-coral"}`}>
+                      {student.progress?.today_status || "NOT MARKED"}
+                    </span>
+                  </td>
+                  <td className="min-w-44">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full ${student.progress?.below_75 ? "bg-red-500" : "bg-brand"}`}
+                          style={{ width: `${Math.min(student.progress?.attendance_percentage || 0, 100)}%` }}
+                        />
+                      </div>
+                      <span className={`text-xs font-black ${student.progress?.below_75 ? "text-red-700" : "text-brand"}`}>
+                        {student.progress?.attendance_percentage || 0}%
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {student.progress?.present_days || 0}/{student.progress?.total_sessions || 0} sessions
+                    </p>
+                  </td>
                   <td>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${student.is_active ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-700"}`}>
                       {student.is_active ? "ACTIVE" : "INACTIVE"}
@@ -181,7 +204,7 @@ export default function StudentManagement() {
               ))}
               {!students.length && (
                 <tr>
-                  <td colSpan="6" className="py-10 text-center text-slate-500">No students found.</td>
+                  <td colSpan="8" className="py-10 text-center text-slate-500">No students found.</td>
                 </tr>
               )}
             </tbody>
