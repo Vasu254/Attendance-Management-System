@@ -36,6 +36,15 @@ export function AuthProvider({ children }) {
     return res.data.user;
   };
 
+  const registerStudent = async (profile) => {
+    const res = await api.post("/auth/student/register", profile);
+    localStorage.setItem("token", res.data.token);
+    localStorage.setItem("user", JSON.stringify(res.data.user));
+    setToken(res.data.token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -43,7 +52,10 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const value = useMemo(() => ({ token, user, loading, login, logout, setUser }), [token, user, loading]);
+  const value = useMemo(
+    () => ({ token, user, loading, login, registerStudent, logout, setUser }),
+    [token, user, loading],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

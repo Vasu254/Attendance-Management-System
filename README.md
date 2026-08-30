@@ -29,6 +29,8 @@ Default local URLs:
 - Backend: http://localhost:5000
 - API health: http://localhost:5000/api/health
 
+On another device on the same network, open `http://<your-computer-ip>:5173`. The frontend will automatically call `http://<your-computer-ip>:5000/api` unless `VITE_API_URL` is set.
+
 Default test admin credentials are created from environment variables, or `admin` / `Admin@123` when unset.
 
 ## Deployment

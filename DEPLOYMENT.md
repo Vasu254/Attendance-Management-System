@@ -5,6 +5,10 @@ This project has two deployable apps:
 - `backend/`: Flask API for Render
 - `frontend/`: React/Vite app for Netlify
 
+Student self-registration is available at `/student/register`. Registered students are saved in the same database as admin-created students, so they appear in admin student management, attendance monitoring, and reports.
+
+For local network testing, run both apps and open `http://<your-computer-ip>:5173` from another device. The frontend automatically calls `http://<your-computer-ip>:5000/api` when `VITE_API_URL` is not set.
+
 ## 1. Push Code To GitHub
 
 Authenticate GitHub on this machine, then push:

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { FiLogIn } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 
@@ -82,13 +82,19 @@ export default function LoginShell({ role }) {
           </button>
         </form>
         <div className="mt-5 flex items-center justify-between text-sm">
-          <a
+          <Link
             className="font-semibold text-brand"
-            href={isAdmin ? "/student/login" : "/admin/login"}
+            to={isAdmin ? "/student/login" : "/admin/login"}
           >
             {isAdmin ? "Student login" : "Admin login"}
-          </a>
-          {isAdmin && <span className="text-slate-400">Password</span>}
+          </Link>
+          {isAdmin ? (
+            <span className="text-slate-400">Password</span>
+          ) : (
+            <Link className="font-semibold text-brand" to="/student/register">
+              Register student
+            </Link>
+          )}
         </div>
       </section>
     </main>

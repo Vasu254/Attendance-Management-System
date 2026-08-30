@@ -1,5 +1,5 @@
 import csv
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from io import StringIO
 
 from flask import Blueprint, Response, jsonify, request
@@ -321,41 +321,127 @@ def attendance_monitoring():
     )
 
 
-def report_rows(start_date, end_date):
+def date_range(start_date, end_date):
+    days = (end_date - start_date).days
+    return [start_date + timedelta(days=offset) for offset in range(days + 1)]
+
+
+def report_data(start_date, end_date):
+    if end_date < start_date:
+        raise ValueError("End date must be after start date")
+
+    dates = date_range(start_date, end_date)
     query = apply_student_filters(Student.query.join(Student.user).filter(User.role == "STUDENT"))
     students = query.order_by(Student.full_name.asc()).all()
     permissions = AttendancePermission.query.filter(
         AttendancePermission.attendance_date >= start_date,
         AttendancePermission.attendance_date <= end_date,
     ).all()
+    permissions_by_date = {}
+    for permission in permissions:
+        permissions_by_date.setdefault(permission.attendance_date, []).append(permission)
+
+    attendance_by_student_date = {}
+    if students:
+        attendance_rows = Attendance.query.filter(
+            Attendance.attendance_date >= start_date,
+            Attendance.attendance_date <= end_date,
+            Attendance.student_id.in_([student.id for student in students]),
+        ).all()
+        attendance_by_student_date = {
+            (attendance.student_id, attendance.attendance_date): attendance
+            for attendance in attendance_rows
+        }
+
     rows = []
     for student in students:
-        eligible_dates = {
-            permission.attendance_date
-            for permission in permissions
-            if student_is_eligible(student, permission)
-        }
-        total_sessions = len(eligible_dates)
+        daily_records = []
         present_days = 0
-        if eligible_dates:
-            present_days = Attendance.query.filter(
-                Attendance.student_id == student.id,
-                Attendance.attendance_date.in_(eligible_dates),
-            ).count()
+        absent_days = 0
+        total_sessions = 0
+
+        for target_date in dates:
+            day_permissions = permissions_by_date.get(target_date, [])
+            eligible = any(student_is_eligible(student, permission) for permission in day_permissions)
+            attendance = attendance_by_student_date.get((student.id, target_date))
+            marked_time = attendance.marked_time.strftime("%H:%M") if attendance else None
+
+            if attendance and attendance.status == "PRESENT":
+                status = "PRESENT"
+                if eligible:
+                    total_sessions += 1
+                    present_days += 1
+            elif eligible:
+                status = "ABSENT"
+                total_sessions += 1
+                absent_days += 1
+            elif day_permissions:
+                status = "NOT ELIGIBLE"
+            else:
+                status = "NO SESSION"
+
+            daily_records.append(
+                {
+                    "date": target_date.isoformat(),
+                    "status": status,
+                    "marked_time": marked_time,
+                }
+            )
+
         percentage = round((present_days / total_sessions) * 100, 2) if total_sessions else 0
         rows.append(
             {
                 "student_id": student.student_id,
                 "full_name": student.full_name,
+                "course": student.course,
                 "batch": student.batch,
                 "section": student.section,
                 "present_days": present_days,
+                "absent_days": absent_days,
                 "total_sessions": total_sessions,
                 "percentage": percentage,
                 "below_75": percentage < 75 if total_sessions else False,
+                "daily_records": daily_records,
             }
         )
-    return rows
+
+    daily_summary = []
+    for target_date in dates:
+        date_key = target_date.isoformat()
+        records = [
+            record
+            for row in rows
+            for record in row["daily_records"]
+            if record["date"] == date_key
+        ]
+        present = sum(1 for record in records if record["status"] == "PRESENT")
+        absent = sum(1 for record in records if record["status"] == "ABSENT")
+        total = present + absent
+        daily_summary.append(
+            {
+                "date": date_key,
+                "present": present,
+                "absent": absent,
+                "total_sessions": total,
+                "percentage": round((present / total) * 100, 2) if total else 0,
+            }
+        )
+
+    total_present = sum(row["present_days"] for row in rows)
+    total_absent = sum(row["absent_days"] for row in rows)
+    total_sessions = sum(row["total_sessions"] for row in rows)
+    return {
+        "dates": [target_date.isoformat() for target_date in dates],
+        "daily_summary": daily_summary,
+        "rows": rows,
+        "totals": {
+            "students": len(rows),
+            "present_days": total_present,
+            "absent_days": total_absent,
+            "total_sessions": total_sessions,
+            "percentage": round((total_present / total_sessions) * 100, 2) if total_sessions else 0,
+        },
+    }
 
 
 @admin_bp.get("/reports")
@@ -363,7 +449,11 @@ def report_rows(start_date, end_date):
 def reports():
     start_date = parse_date(request.args.get("start_date"), date.today())
     end_date = parse_date(request.args.get("end_date"), date.today())
-    return jsonify({"start_date": start_date.isoformat(), "end_date": end_date.isoformat(), "rows": report_rows(start_date, end_date)})
+    try:
+        data = report_data(start_date, end_date)
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
+    return jsonify({"start_date": start_date.isoformat(), "end_date": end_date.isoformat(), **data})
 
 
 @admin_bp.get("/reports/export")
@@ -371,13 +461,49 @@ def reports():
 def export_reports():
     start_date = parse_date(request.args.get("start_date"), date.today())
     end_date = parse_date(request.args.get("end_date"), date.today())
+    try:
+        data = report_data(start_date, end_date)
+    except ValueError as error:
+        return jsonify({"message": str(error)}), 400
+
     output = StringIO()
+    fieldnames = [
+        "student_id",
+        "full_name",
+        "course",
+        "batch",
+        "section",
+        "present_days",
+        "absent_days",
+        "total_sessions",
+        "percentage",
+        "below_75",
+    ]
+    for report_date in data["dates"]:
+        fieldnames.extend([f"{report_date} status", f"{report_date} marked_time"])
+
     writer = csv.DictWriter(
         output,
-        fieldnames=["student_id", "full_name", "batch", "section", "present_days", "total_sessions", "percentage", "below_75"],
+        fieldnames=fieldnames,
     )
     writer.writeheader()
-    writer.writerows(report_rows(start_date, end_date))
+    for row in data["rows"]:
+        csv_row = {
+            "student_id": row["student_id"],
+            "full_name": row["full_name"],
+            "course": row["course"],
+            "batch": row["batch"],
+            "section": row["section"],
+            "present_days": row["present_days"],
+            "absent_days": row["absent_days"],
+            "total_sessions": row["total_sessions"],
+            "percentage": row["percentage"],
+            "below_75": row["below_75"],
+        }
+        for record in row["daily_records"]:
+            csv_row[f"{record['date']} status"] = record["status"]
+            csv_row[f"{record['date']} marked_time"] = record["marked_time"] or ""
+        writer.writerow(csv_row)
     return Response(
         output.getvalue(),
         mimetype="text/csv",

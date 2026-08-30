@@ -4,6 +4,7 @@ import AdminRoute from "./components/AdminRoute";
 import StudentRoute from "./components/StudentRoute";
 import AdminLogin from "./pages/auth/AdminLogin";
 import StudentLogin from "./pages/auth/StudentLogin";
+import StudentRegister from "./pages/auth/StudentRegister";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import StudentManagement from "./pages/admin/StudentManagement";
 import AddStudent from "./pages/admin/AddStudent";
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/student/login" replace />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/student/login" element={<StudentLogin />} />
+      <Route path="/student/register" element={<StudentRegister />} />
       <Route element={<AdminRoute />}>
         <Route element={<Layout />}>
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
