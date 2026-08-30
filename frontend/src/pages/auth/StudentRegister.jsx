@@ -55,48 +55,54 @@ export default function StudentRegister() {
 
   return (
     <main className="min-h-screen bg-panel px-4 py-8 sm:py-10">
-      <section className="mx-auto w-full max-w-4xl rounded-lg border border-slate-200 bg-white p-5 shadow-soft sm:p-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-normal text-brand">Student Portal</p>
-            <h1 className="mt-2 text-3xl font-black text-ink">Student Register</h1>
-            <p className="mt-2 max-w-2xl text-sm text-slate-500">
-              Create your student account so your attendance and profile details are saved in the system.
-            </p>
+      <section className="mx-auto w-full max-w-4xl overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-soft">
+        <div className="border-b border-slate-100 bg-teal-50/70 px-5 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-md bg-brand text-lg font-black text-white shadow-lift">
+                A
+              </div>
+              <div>
+                <p className="text-sm font-bold uppercase tracking-normal text-teal-700">Student Portal</p>
+                <h1 className="text-2xl font-black text-ink sm:text-3xl">Student Register</h1>
+              </div>
+            </div>
+            <Link className="btn-secondary shrink-0" to="/student/login">
+              <FiArrowLeft /> Login
+            </Link>
           </div>
-          <Link className="btn-secondary shrink-0" to="/student/login">
-            <FiArrowLeft /> Login
-          </Link>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-            {error}
-          </div>
-        )}
+        <div className="p-5 sm:p-6">
+          {error && (
+            <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+              {error}
+            </div>
+          )}
 
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
-          <Input label="Student ID" value={form.student_id} onChange={(value) => update("student_id", value)} />
-          <Input label="Full Name" value={form.full_name} onChange={(value) => update("full_name", value)} />
-          <Input label="Email" type="email" value={form.email} onChange={(value) => update("email", value)} />
-          <Input label="Mobile Number" type="tel" value={form.mobile_number} onChange={(value) => update("mobile_number", value)} />
-          <Input label="Course" value={form.course} onChange={(value) => update("course", value)} />
-          <Input label="Batch" value={form.batch} onChange={(value) => update("batch", value)} />
-          <Input label="Section" value={form.section} onChange={(value) => update("section", value)} />
-          <Input label="Login Username" value={form.username} onChange={(value) => update("username", value)} />
-          <Input label="Password" type="password" value={form.password} onChange={(value) => update("password", value)} />
-          <Input
-            label="Confirm Password"
-            type="password"
-            value={form.confirm_password}
-            onChange={(value) => update("confirm_password", value)}
-          />
-          <div className="md:col-span-2">
-            <button className="btn-primary w-full sm:w-auto" disabled={loading}>
-              <FiUserPlus /> {loading ? "Registering..." : "Register Student"}
-            </button>
-          </div>
-        </form>
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
+            <Input label="Student ID" value={form.student_id} onChange={(value) => update("student_id", value)} />
+            <Input label="Full Name" value={form.full_name} onChange={(value) => update("full_name", value)} />
+            <Input label="Email" type="email" value={form.email} onChange={(value) => update("email", value)} />
+            <Input label="Mobile Number" type="tel" value={form.mobile_number} onChange={(value) => update("mobile_number", value)} />
+            <Input label="Course" value={form.course} onChange={(value) => update("course", value)} />
+            <Input label="Batch" value={form.batch} onChange={(value) => update("batch", value)} />
+            <Input label="Section" value={form.section} onChange={(value) => update("section", value)} />
+            <Input label="Login Username" value={form.username} onChange={(value) => update("username", value)} />
+            <Input label="Password" type="password" value={form.password} onChange={(value) => update("password", value)} />
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={form.confirm_password}
+              onChange={(value) => update("confirm_password", value)}
+            />
+            <div className="md:col-span-2">
+              <button className="btn-primary w-full sm:w-auto" disabled={loading}>
+                <FiUserPlus /> {loading ? "Registering..." : "Register Student"}
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
     </main>
   );

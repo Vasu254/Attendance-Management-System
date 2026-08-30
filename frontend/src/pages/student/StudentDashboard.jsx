@@ -17,8 +17,8 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <p className="text-sm font-semibold text-slate-500">Welcome</p>
+      <section className="surface p-5">
+        <p className="text-sm font-bold uppercase tracking-normal text-brand">Welcome</p>
         <h2 className="mt-1 text-2xl font-black text-ink">{student.full_name}</h2>
         <p className="mt-2 text-sm text-slate-500">{student.student_id} · {student.course} · {student.batch} / {student.section}</p>
         {data.permission.can_mark && (
@@ -33,8 +33,8 @@ export default function StudentDashboard() {
         <StatCard label="Present Days" value={data.total_present_days} icon={FiCalendar} tone="slate" />
         <StatCard label="Attendance" value={`${data.attendance_percentage}%`} icon={FiPercent} tone="coral" />
       </div>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">Attendance Session</h2>
+      <section className="surface p-5">
+        <h2 className="text-lg font-black text-ink">Attendance Session</h2>
         {data.permission.permission ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Info label="Date" value={data.permission.permission.attendance_date} />

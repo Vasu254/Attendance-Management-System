@@ -84,8 +84,8 @@ export default function AttendancePermission() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">Attendance Permission</h2>
+      <section className="surface p-5">
+        <h2 className="text-lg font-black text-ink">Attendance Permission</h2>
         {(message || error) && (
           <div className={`mt-4 rounded-md px-3 py-2 text-sm font-medium ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>
             {error || message}
@@ -130,7 +130,7 @@ export default function AttendancePermission() {
             <input className="field" placeholder="All sections" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} />
           </div>
           <div className="sm:col-span-2">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-lg border border-slate-200/80 bg-slate-50/90 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-ink">Allowed Campus Location</h3>
@@ -206,8 +206,8 @@ export default function AttendancePermission() {
         </form>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">Selected Date Status</h2>
+      <section className="surface p-5">
+        <h2 className="text-lg font-black text-ink">Selected Date Status</h2>
         {permission ? (
           <div className="mt-5 space-y-4">
             <div className={`rounded-lg p-4 ${permission.status === "OPEN" ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-700"}`}>
@@ -238,7 +238,7 @@ function LocationPreview({ latitude, longitude, radius, locationName }) {
   return (
     <div className="min-h-64 overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="relative h-44 bg-[linear-gradient(90deg,#dbeafe_1px,transparent_1px),linear-gradient(0deg,#dbeafe_1px,transparent_1px)] bg-[size:28px_28px]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_30%,rgba(20,184,166,0.20),transparent_28%),radial-gradient(circle_at_70%_65%,rgba(245,158,11,0.18),transparent_30%)]" />
+        <div className="absolute inset-0 bg-teal-50/40" />
         <div className="absolute left-[18%] top-8 h-7 w-28 rotate-[-18deg] rounded-full bg-white/80" />
         <div className="absolute bottom-8 right-[12%] h-8 w-36 rotate-[22deg] rounded-full bg-white/80" />
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">

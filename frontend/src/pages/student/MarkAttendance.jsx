@@ -77,11 +77,10 @@ export default function MarkAttendance() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
+      <section className="surface p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl font-black text-ink">Self Attendance</h2>
-            <p className="mt-1 text-sm text-slate-500">Confirm your session status and location before marking today&apos;s attendance.</p>
           </div>
           <div className={`inline-flex w-fit items-center gap-2 rounded-md px-3 py-2 text-sm font-bold ${permission.can_mark ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-600"}`}>
             {permission.can_mark ? <FiCheckCircle /> : <FiAlertCircle />} {permission.can_mark ? "Ready" : "Not Ready"}
@@ -149,7 +148,7 @@ function LocationPanel({ session, location, distanceMeters, insideLocation, load
   return (
     <aside className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
       <div className="relative h-64 bg-[linear-gradient(90deg,#dbeafe_1px,transparent_1px),linear-gradient(0deg,#dbeafe_1px,transparent_1px)] bg-[size:30px_30px]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(20,184,166,0.20),transparent_26%),radial-gradient(circle_at_78%_70%,rgba(245,158,11,0.18),transparent_30%)]" />
+        <div className="absolute inset-0 bg-teal-50/40" />
         <div className="absolute left-6 top-10 h-8 w-36 rotate-[-22deg] rounded-full bg-white/80" />
         <div className="absolute bottom-10 right-8 h-9 w-40 rotate-[24deg] rounded-full bg-white/80" />
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">

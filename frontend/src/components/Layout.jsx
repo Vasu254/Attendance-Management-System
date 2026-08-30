@@ -22,11 +22,11 @@ export default function Layout() {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-panel lg:flex">
+    <div className="app-shell min-h-screen lg:flex">
       <Sidebar role={user?.role} open={open} onClose={() => setOpen(false)} />
       <div className="min-w-0 flex-1">
         <Navbar title={titles[location.pathname] || "Attendance System"} onMenu={() => setOpen(true)} />
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
           <Outlet />
         </main>
       </div>

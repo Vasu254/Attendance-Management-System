@@ -88,8 +88,8 @@ export default function StudentManagement() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">{editing ? "Edit Student" : "Add Student"}</h2>
+      <section className="surface p-5">
+        <h2 className="text-lg font-black text-ink">{editing ? "Edit Student" : "Add Student"}</h2>
         {(message || error) && (
           <div className={`mt-4 rounded-md px-3 py-2 text-sm font-medium ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>
             {error || message}

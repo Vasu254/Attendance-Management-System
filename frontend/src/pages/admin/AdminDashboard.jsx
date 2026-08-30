@@ -32,8 +32,8 @@ export default function AdminDashboard() {
         <StatCard label="Eligible Students" value={data.eligible_students} icon={FiUsers} tone="slate" />
         <StatCard label="Today's Attendance" value={`${data.attendance_percentage}%`} icon={FiActivity} tone="gold" />
       </div>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h2 className="text-lg font-bold text-ink">Current Attendance Window</h2>
+      <section className="surface p-5">
+        <h2 className="text-lg font-black text-ink">Current Attendance Window</h2>
         {data.permission ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Info label="Date" value={data.permission.attendance_date} />
