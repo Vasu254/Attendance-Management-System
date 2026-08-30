@@ -11,7 +11,8 @@ export default function LoginShell({ role }) {
   const [loading, setLoading] = useState(false);
 
   if (user?.role === "ADMIN") return <Navigate to="/admin/dashboard" replace />;
-  if (user?.role === "STUDENT") return <Navigate to="/student/dashboard" replace />;
+  if (user?.role === "STUDENT")
+    return <Navigate to="/student/dashboard" replace />;
 
   const isAdmin = role === "ADMIN";
 
@@ -21,7 +22,9 @@ export default function LoginShell({ role }) {
     setLoading(true);
     try {
       await login(role, form);
-      navigate(isAdmin ? "/admin/dashboard" : "/student/dashboard", { replace: true });
+      navigate(isAdmin ? "/admin/dashboard" : "/student/dashboard", {
+        replace: true,
+      });
     } catch (err) {
       setError(err.response?.data?.message || "Unable to login");
     } finally {
@@ -33,18 +36,30 @@ export default function LoginShell({ role }) {
     <main className="grid min-h-screen place-items-center bg-panel px-4 py-10">
       <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
         <div className="mb-6">
-          <p className="text-sm font-bold uppercase tracking-normal text-brand">{isAdmin ? "Admin Portal" : "Student Portal"}</p>
-          <h1 className="mt-2 text-3xl font-black text-ink">{isAdmin ? "Admin Login" : "Student Login"}</h1>
-          <p className="mt-2 text-sm text-slate-500">Sign in to continue to the attendance system.</p>
+          <p className="text-sm font-bold uppercase tracking-normal text-brand">
+            {isAdmin ? "Admin Portal" : "Student Portal"}
+          </p>
+          <h1 className="mt-2 text-3xl font-black text-ink">
+            {isAdmin ? "Admin Login" : "Student Login"}
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            Sign in to continue to the attendance system.
+          </p>
         </div>
-        {error && <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</div>}
+        {error && (
+          <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+            {error}
+          </div>
+        )}
         <form className="space-y-4" onSubmit={submit}>
           <div>
             <label className="label">Username</label>
             <input
               className="field"
               value={form.username}
-              onChange={(event) => setForm({ ...form, username: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, username: event.target.value })
+              }
               autoComplete="username"
               required
             />
@@ -55,7 +70,9 @@ export default function LoginShell({ role }) {
               className="field"
               type="password"
               value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
+              onChange={(event) =>
+                setForm({ ...form, password: event.target.value })
+              }
               autoComplete="current-password"
               required
             />
@@ -65,10 +82,13 @@ export default function LoginShell({ role }) {
           </button>
         </form>
         <div className="mt-5 flex items-center justify-between text-sm">
-          <a className="font-semibold text-brand" href={isAdmin ? "/student/login" : "/admin/login"}>
+          <a
+            className="font-semibold text-brand"
+            href={isAdmin ? "/student/login" : "/admin/login"}
+          >
             {isAdmin ? "Student login" : "Admin login"}
           </a>
-          {isAdmin && <span className="text-slate-400">admin / Admin@123</span>}
+          {isAdmin && <span className="text-slate-400">Password</span>}
         </div>
       </section>
     </main>

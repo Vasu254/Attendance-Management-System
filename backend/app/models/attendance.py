@@ -12,6 +12,9 @@ class Attendance(db.Model):
     attendance_date = db.Column(db.Date, nullable=False, index=True)
     marked_time = db.Column(db.Time, nullable=False)
     status = db.Column(db.String(20), nullable=False, default="PRESENT")
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    distance_meters = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     student = db.relationship("Student", back_populates="attendances")
@@ -23,5 +26,8 @@ class Attendance(db.Model):
             "attendance_date": self.attendance_date.isoformat(),
             "marked_time": self.marked_time.strftime("%H:%M"),
             "status": self.status,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "distance_meters": round(self.distance_meters, 1) if self.distance_meters is not None else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

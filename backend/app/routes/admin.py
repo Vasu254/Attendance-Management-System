@@ -11,6 +11,7 @@ from app.extensions import bcrypt, db
 from app.models import Attendance, AttendancePermission, Student, User
 from app.utils.attendance import eligible_students_query, latest_permission_for, student_is_eligible
 from app.utils.auth import role_required
+from app.utils.location import parse_coordinate, validate_geofence
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -203,6 +204,17 @@ def reset_student_password(student_pk):
 def create_attendance_permission():
     data = request.get_json() or {}
     try:
+        latitude = parse_coordinate(data.get("latitude"))
+        longitude = parse_coordinate(data.get("longitude"))
+        radius_meters = parse_coordinate(data.get("radius_meters"))
+    except (TypeError, ValueError):
+        return jsonify({"message": "Invalid location coordinates"}), 400
+
+    geofence_error = validate_geofence(latitude, longitude, radius_meters)
+    if geofence_error:
+        return jsonify({"message": geofence_error}), 400
+
+    try:
         permission = AttendancePermission(
             attendance_date=parse_date(data.get("attendance_date")),
             start_time=parse_time(data.get("start_time")),
@@ -210,6 +222,10 @@ def create_attendance_permission():
             status=data.get("status", "OPEN"),
             batch=(data.get("batch") or None),
             section=(data.get("section") or None),
+            location_name=(data.get("location_name") or None),
+            latitude=latitude,
+            longitude=longitude,
+            radius_meters=radius_meters,
             created_by=int(get_jwt_identity()),
         )
     except (TypeError, ValueError):

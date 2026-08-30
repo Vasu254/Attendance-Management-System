@@ -7,6 +7,7 @@ from app.extensions import db
 from app.models import Attendance, AttendancePermission
 from app.utils.attendance import latest_permission_for, student_is_eligible
 from app.utils.auth import get_current_user, role_required
+from app.utils.location import distance_in_meters, parse_coordinate, permission_has_geofence
 
 student_bp = Blueprint("student", __name__)
 
@@ -87,6 +88,7 @@ def attendance_permission():
 def mark_attendance():
     student = current_student()
     user = get_current_user()
+    data = request.get_json() or {}
     if not user.is_active:
         return jsonify({"message": "Your account has been deactivated. Please contact the administrator."}), 403
 
@@ -106,7 +108,42 @@ def mark_attendance():
     if Attendance.query.filter_by(student_id=student.id, attendance_date=today).first():
         return jsonify({"message": "ATTENDANCE ALREADY MARKED TODAY"}), 409
 
-    attendance = Attendance(student_id=student.id, attendance_date=today, marked_time=now.time(), status="PRESENT")
+    latitude = None
+    longitude = None
+    distance_meters = None
+    if permission_has_geofence(permission):
+        try:
+            latitude = parse_coordinate(data.get("latitude"))
+            longitude = parse_coordinate(data.get("longitude"))
+        except (TypeError, ValueError):
+            return jsonify({"message": "Invalid location coordinates"}), 400
+        if latitude is None or longitude is None:
+            return jsonify({"message": "Location access is required for this attendance session"}), 400
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            return jsonify({"message": "Invalid location coordinates"}), 400
+
+        distance_meters = distance_in_meters(permission.latitude, permission.longitude, latitude, longitude)
+        if distance_meters > permission.radius_meters:
+            return (
+                jsonify(
+                    {
+                        "message": "You are outside the allowed attendance location",
+                        "distance_meters": round(distance_meters, 1),
+                        "radius_meters": round(permission.radius_meters, 1),
+                    }
+                ),
+                403,
+            )
+
+    attendance = Attendance(
+        student_id=student.id,
+        attendance_date=today,
+        marked_time=now.time(),
+        status="PRESENT",
+        latitude=latitude,
+        longitude=longitude,
+        distance_meters=distance_meters,
+    )
     db.session.add(attendance)
     try:
         db.session.commit()

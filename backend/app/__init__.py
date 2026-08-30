@@ -8,6 +8,7 @@ from .routes.auth import auth_bp
 from .routes.health import health_bp
 from .routes.student import student_bp
 from .utils.seed import seed_admin
+from .utils.schema import ensure_location_columns
 
 
 def create_app():
@@ -26,6 +27,7 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        ensure_location_columns()
         seed_admin()
 
     return app
