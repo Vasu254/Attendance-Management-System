@@ -76,3 +76,27 @@ select {
 .data-table tbody tr {
   @apply transition hover:bg-slate-50/80;
 }
+
+/* Blinking attendance button */
+@keyframes attendance-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.55);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgba(13, 148, 136, 0);
+    transform: scale(1.02);
+  }
+}
+
+.btn-attendance-blink {
+  @apply btn bg-brand text-white shadow-lift hover:bg-teal-800 active:translate-y-px;
+  animation: attendance-pulse 1.8s ease-in-out infinite;
+}
+
+.btn-attendance-blink:disabled {
+  animation: none;
+}

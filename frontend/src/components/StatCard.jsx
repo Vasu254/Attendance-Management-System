@@ -20,6 +20,10 @@ export default function StatCard({ label, value, icon: Icon, tone = "teal" }) {
       icon: "bg-red-50 text-red-700 ring-red-100",
       bar: "bg-red-500",
     },
+    purple: {
+      icon: "bg-purple-50 text-purple-700 ring-purple-100",
+      bar: "bg-purple-600",
+    },
   };
   const style = tones[tone] || tones.teal;
 

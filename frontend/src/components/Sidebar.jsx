@@ -12,7 +12,8 @@ import {
 const adminLinks = [
   { to: "/admin/dashboard", label: "Dashboard", icon: FiHome },
   { to: "/admin/students", label: "Students", icon: FiUsers },
-  { to: "/admin/attendance-permission", label: "Attendance Permission", icon: FiCalendar },
+  { to: "/admin/attendance-permission", label: "Sessions", icon: FiCalendar },
+  { to: "/admin/attendance-controls", label: "Controls", icon: FiClipboard },
   { to: "/admin/attendance-monitoring", label: "Attendance Monitoring", icon: FiCheckCircle },
   { to: "/admin/reports", label: "Reports", icon: FiBarChart2 },
 ];
@@ -21,11 +22,17 @@ const studentLinks = [
   { to: "/student/dashboard", label: "Dashboard", icon: FiHome },
   { to: "/student/mark-attendance", label: "Mark Attendance", icon: FiCheckCircle },
   { to: "/student/attendance-history", label: "My Attendance", icon: FiClipboard },
+  { to: "/student/permission-requests", label: "Request Permission", icon: FiCalendar },
   { to: "/student/profile", label: "Profile", icon: FiUser },
 ];
 
+const mentorLinks = [
+  { to: "/mentor/dashboard", label: "Dashboard", icon: FiHome },
+  { to: "/admin/attendance-permission", label: "My Sessions", icon: FiCalendar },
+];
+
 export default function Sidebar({ role, open, onClose }) {
-  const links = role === "ADMIN" ? adminLinks : studentLinks;
+  const links = role === "ADMIN" ? adminLinks : role === "MENTOR" ? mentorLinks : studentLinks;
   return (
     <>
       {open && <button className="fixed inset-0 z-30 bg-slate-950/35 backdrop-blur-sm lg:hidden" onClick={onClose} aria-label="Close menu" />}
@@ -34,20 +41,20 @@ export default function Sidebar({ role, open, onClose }) {
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-7 rounded-lg border border-teal-100 bg-teal-50/70 p-4">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-md bg-brand text-base font-black text-white shadow-lift">
-              A
+        {/* Brand logo */}
+        <div className="mb-7 rounded-xl border border-red-100 bg-gradient-to-br from-red-50/60 to-white p-4">
+          <img
+            src="/logo.png"
+            alt="Fullstack Experts Academy"
+            className="mx-auto h-auto w-full max-w-[220px] scale-[1.4] object-contain mix-blend-multiply"
+          />
+          <div className="mt-3 flex justify-center">
+            <div className="inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-wider text-red-600 shadow-sm ring-1 ring-red-100">
+              {role === "ADMIN" ? "Admin Workspace" : role === "MENTOR" ? "Mentor Workspace" : "Student Workspace"}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xl font-black text-ink">Attendly</p>
-              <p className="truncate text-sm font-medium text-teal-700">Student Attendance</p>
-            </div>
-          </div>
-          <div className="mt-4 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-normal text-brand shadow-sm">
-            {role === "ADMIN" ? "Admin Workspace" : "Student Workspace"}
           </div>
         </div>
+
         <nav className="space-y-1">
           {links.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -56,7 +63,7 @@ export default function Sidebar({ role, open, onClose }) {
               onClick={onClose}
               className={({ isActive }) =>
                 `group flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-bold transition ${
-                  isActive ? "bg-brand text-white shadow-lift" : "text-slate-600 hover:bg-slate-50 hover:text-ink"
+                  isActive ? "bg-red-600 text-white shadow-lift" : "text-slate-600 hover:bg-red-50 hover:text-red-700"
                 }`
               }
             >

@@ -44,20 +44,15 @@ def student_login():
     return login_for_role("STUDENT")
 
 
+@auth_bp.post("/mentor/login")
+def mentor_login():
+    return login_for_role("MENTOR")
+
+
 @auth_bp.post("/student/register")
 def student_register():
     data = request.get_json() or {}
-    required = [
-        "student_id",
-        "full_name",
-        "email",
-        "mobile_number",
-        "course",
-        "batch",
-        "section",
-        "username",
-        "password",
-    ]
+    required = ["student_id", "email", "batch", "password"]
     missing = [field for field in required if not clean(data.get(field))]
     if missing:
         return jsonify({"message": f"Missing fields: {', '.join(missing)}"}), 400
@@ -70,31 +65,56 @@ def student_register():
     if "@" not in email:
         return jsonify({"message": "Enter a valid email address"}), 400
 
+    enrollment = clean(data.get("student_id"))
     user = User(
-        username=clean(data.get("username")),
+        username=enrollment,
         password_hash=bcrypt.generate_password_hash(password).decode("utf-8"),
         role="STUDENT",
         is_active=True,
     )
     student = Student(
         user=user,
-        student_id=clean(data.get("student_id")),
-        full_name=clean(data.get("full_name")),
+        student_id=enrollment,
+        full_name=enrollment,
         email=email,
-        mobile_number=clean(data.get("mobile_number")),
-        course=clean(data.get("course")),
+        mobile_number="",
+        course="N/A",
         batch=clean(data.get("batch")),
-        section=clean(data.get("section")),
+        section="N/A",
     )
     db.session.add(student)
     try:
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"message": "Username, Student ID, or Email already exists"}), 409
+        return jsonify({"message": "Enrollment Number or Email already exists"}), 409
 
     token = create_access_token(identity=str(user.id), additional_claims={"role": user.role})
     return jsonify({"message": "Registration successful", "token": token, "user": auth_payload(user)}), 201
+
+
+@auth_bp.post("/student/forgot-password")
+def student_forgot_password():
+    data = request.get_json() or {}
+    student_id = clean(data.get("student_id"))
+    email = clean(data.get("email")).lower()
+    new_password = data.get("new_password") or ""
+    confirm_password = data.get("confirm_password") or ""
+
+    if not student_id or not email:
+        return jsonify({"message": "Enrollment ID and Email are required"}), 400
+    if len(new_password) < 6:
+        return jsonify({"message": "Password must be at least 6 characters"}), 400
+    if new_password != confirm_password:
+        return jsonify({"message": "Passwords do not match"}), 400
+
+    student = Student.query.filter_by(student_id=student_id).first()
+    if not student or student.email.lower() != email:
+        return jsonify({"message": "No account found with this Enrollment ID and Email combination"}), 404
+
+    student.user.password_hash = bcrypt.generate_password_hash(new_password).decode("utf-8")
+    db.session.commit()
+    return jsonify({"message": "Password has been reset successfully. You can now login with your new password."})
 
 
 @auth_bp.get("/me")

@@ -12,6 +12,9 @@ class Attendance(db.Model):
     attendance_date = db.Column(db.Date, nullable=False, index=True)
     marked_time = db.Column(db.Time, nullable=False)
     status = db.Column(db.String(20), nullable=False, default="PRESENT")
+    # Existing databases store CLASS / MENTORING here. Keeping the field mapped
+    # lets legacy records remain separated in all new reports.
+    tracker_type = db.Column(db.String(20), nullable=True, default="CLASS", index=True)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
     distance_meters = db.Column(db.Float, nullable=True)
@@ -26,6 +29,7 @@ class Attendance(db.Model):
             "attendance_date": self.attendance_date.isoformat(),
             "marked_time": self.marked_time.strftime("%H:%M"),
             "status": self.status,
+            "session_type": self.tracker_type or "CLASS",
             "latitude": self.latitude,
             "longitude": self.longitude,
             "distance_meters": round(self.distance_meters, 1) if self.distance_meters is not None else None,

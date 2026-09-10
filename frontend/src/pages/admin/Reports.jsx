@@ -6,7 +6,7 @@ import StatCard from "../../components/StatCard";
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Reports() {
-  const [filters, setFilters] = useState({ start_date: today, end_date: today, search: "", batch: "", section: "" });
+  const [filters, setFilters] = useState({ start_date: today, end_date: today, session_type: "CLASS", search: "", batch: "", section: "" });
   const [data, setData] = useState({ dates: [], daily_summary: [], rows: [], totals: {} });
   const [error, setError] = useState("");
 
@@ -35,9 +35,10 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 xl:grid-cols-[170px_170px_minmax(220px,1fr)_150px_150px_auto_auto]">
+      <div className="grid gap-3 xl:grid-cols-[170px_170px_160px_minmax(220px,1fr)_150px_150px_auto_auto]">
         <input className="field" type="date" value={filters.start_date} onChange={(e) => setFilters({ ...filters, start_date: e.target.value })} />
         <input className="field" type="date" value={filters.end_date} onChange={(e) => setFilters({ ...filters, end_date: e.target.value })} />
+        <select className="field" value={filters.session_type} onChange={(e) => setFilters({ ...filters, session_type: e.target.value })}><option value="CLASS">Class</option><option value="MENTORING">Mentoring</option><option value="ALL">All sessions</option></select>
         <div className="relative">
           <FiSearch className="pointer-events-none absolute left-3 top-3 text-slate-400" />
           <input
@@ -75,6 +76,8 @@ export default function Reports() {
                 <th>Date</th>
                 <th>Present</th>
                 <th>Absent</th>
+                <th>Permission</th>
+                <th>Holiday</th>
                 <th>Total Sessions</th>
                 <th>Percentage</th>
               </tr>
@@ -85,6 +88,8 @@ export default function Reports() {
                   <td className="font-bold text-ink">{day.date}</td>
                   <td>{day.present}</td>
                   <td>{day.absent}</td>
+                  <td>{day.permission || 0}</td>
+                  <td>{day.holiday || 0}</td>
                   <td>{day.total_sessions}</td>
                   <td>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${day.percentage < 75 && day.total_sessions ? "bg-red-100 text-red-700" : "bg-teal-50 text-teal-700"}`}>
@@ -95,7 +100,7 @@ export default function Reports() {
               ))}
               {!data.daily_summary.length && (
                 <tr>
-                  <td colSpan="5" className="py-10 text-center text-slate-500">No dates found for this report.</td>
+                  <td colSpan="7" className="py-10 text-center text-slate-500">No dates found for this report.</td>
                 </tr>
               )}
             </tbody>
@@ -116,6 +121,8 @@ export default function Reports() {
                 <th>Section</th>
                 <th>Present Days</th>
                 <th>Absent Days</th>
+                <th>Permission</th>
+                <th>Holidays</th>
                 <th>Total Sessions</th>
                 <th>Percentage</th>
                 {data.dates.map((reportDate) => (
@@ -133,6 +140,8 @@ export default function Reports() {
                   <td>{row.section}</td>
                   <td>{row.present_days}</td>
                   <td>{row.absent_days}</td>
+                  <td>{row.permission_days || 0}</td>
+                  <td>{row.holiday_days || 0}</td>
                   <td>{row.total_sessions}</td>
                   <td>
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ${row.below_75 ? "bg-red-100 text-red-700" : "bg-teal-50 text-teal-700"}`}>
@@ -151,7 +160,7 @@ export default function Reports() {
               ))}
               {!data.rows.length && (
                 <tr>
-                  <td colSpan={9 + data.dates.length} className="py-10 text-center text-slate-500">No report rows found.</td>
+                <td colSpan={11 + data.dates.length} className="py-10 text-center text-slate-500">No report rows found.</td>
                 </tr>
               )}
             </tbody>

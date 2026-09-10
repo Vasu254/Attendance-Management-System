@@ -14,12 +14,13 @@ def get_current_user():
 
 
 def role_required(role):
+    allowed_roles = {role} if isinstance(role, str) else set(role)
     def decorator(fn):
         @wraps(fn)
         @jwt_required()
         def wrapper(*args, **kwargs):
             user = get_current_user()
-            if not user or user.role != role:
+            if not user or user.role not in allowed_roles:
                 return jsonify({"message": "Access denied"}), 403
             if not user.is_active:
                 return jsonify({"message": "Account is inactive"}), 403

@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const login = async (role, credentials) => {
-    const path = role === "ADMIN" ? "/auth/admin/login" : "/auth/student/login";
+    const path = role === "ADMIN" ? "/auth/admin/login" : role === "MENTOR" ? "/auth/mentor/login" : "/auth/student/login";
     const res = await api.post(path, credentials);
     localStorage.setItem("token", res.data.token);
     localStorage.setItem("user", JSON.stringify(res.data.user));

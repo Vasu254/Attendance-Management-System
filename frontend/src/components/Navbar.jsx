@@ -10,10 +10,11 @@ export default function Navbar({ title, onMenu }) {
           <button className="btn-secondary px-3 lg:hidden" onClick={onMenu} aria-label="Open menu" title="Open menu">
             <FiMenu />
           </button>
+          <img src="/logo.png" alt="Fullstack Experts Academy" className="hidden h-9 w-auto shrink-0 object-contain sm:block" />
           <div className="min-w-0">
             <p className="truncate text-xl font-black text-ink">{title}</p>
             <p className="truncate text-xs font-semibold uppercase tracking-normal text-slate-500">
-              {user?.role === "ADMIN" ? "Administrator" : "Student"} / {user?.username}
+              {user?.role === "ADMIN" ? "Administrator" : user?.role === "MENTOR" ? "Mentor" : "Student"} / {user?.username}
             </p>
           </div>
         </div>

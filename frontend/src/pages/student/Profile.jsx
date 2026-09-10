@@ -16,9 +16,8 @@ export default function Profile() {
         </div>
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <Info label="Enrollment ID" value={student?.student_id} />
         <Info label="Email" value={student?.email} />
-        <Info label="Mobile Number" value={student?.mobile_number} />
-        <Info label="Course" value={student?.course} />
         <Info label="Batch" value={student?.batch} />
         <Info label="Section" value={student?.section} />
         <Info label="Account Status" value={student?.is_active ? "ACTIVE" : "INACTIVE"} />

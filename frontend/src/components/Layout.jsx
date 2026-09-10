@@ -6,12 +6,15 @@ import Sidebar from "./Sidebar";
 
 const titles = {
   "/admin/dashboard": "Admin Dashboard",
+  "/mentor/dashboard": "Mentor Dashboard",
   "/admin/students": "Student Management",
-  "/admin/attendance-permission": "Attendance Permission",
+  "/admin/attendance-permission": "Session Management",
+  "/admin/attendance-controls": "Attendance Controls",
   "/admin/attendance-monitoring": "Attendance Monitoring",
   "/admin/reports": "Attendance Reports",
   "/student/dashboard": "Student Dashboard",
   "/student/mark-attendance": "Mark Attendance",
+  "/student/permission-requests": "Permission Requests",
   "/student/attendance-history": "Attendance History",
   "/student/profile": "Profile",
 };

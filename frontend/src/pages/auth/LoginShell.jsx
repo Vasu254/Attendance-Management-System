@@ -11,10 +11,13 @@ export default function LoginShell({ role }) {
   const [loading, setLoading] = useState(false);
 
   if (user?.role === "ADMIN") return <Navigate to="/admin/dashboard" replace />;
+  if (user?.role === "MENTOR") return <Navigate to="/mentor/dashboard" replace />;
   if (user?.role === "STUDENT")
     return <Navigate to="/student/dashboard" replace />;
 
   const isAdmin = role === "ADMIN";
+  const isMentor = role === "MENTOR";
+  const portalLabel = isAdmin ? "Admin" : isMentor ? "Mentor" : "Student";
 
   const submit = async (event) => {
     event.preventDefault();
@@ -22,7 +25,7 @@ export default function LoginShell({ role }) {
     setLoading(true);
     try {
       await login(role, form);
-      navigate(isAdmin ? "/admin/dashboard" : "/student/dashboard", {
+      navigate(isAdmin ? "/admin/dashboard" : isMentor ? "/mentor/dashboard" : "/student/dashboard", {
         replace: true,
       });
     } catch (err) {
@@ -35,21 +38,16 @@ export default function LoginShell({ role }) {
   return (
     <main className="grid min-h-screen place-items-center bg-panel px-4 py-10">
       <section className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-soft">
-        <div className="border-b border-slate-100 bg-teal-50/70 px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-md bg-brand text-lg font-black text-white shadow-lift">
-              A
-            </div>
-            <div>
-              <p className="text-lg font-black text-ink">Attendly</p>
-              <p className="text-sm font-semibold text-teal-700">{isAdmin ? "Admin Portal" : "Student Portal"}</p>
-            </div>
+        <div className="border-b border-slate-100 bg-gradient-to-r from-red-50/60 to-white px-6 py-5">
+          <div className="flex flex-col items-center gap-2 overflow-hidden">
+            <img src="/logo.png" alt="Fullstack Experts Academy" className="h-auto w-full max-w-[280px] scale-[1.5] object-contain mix-blend-multiply" />
+            <p className="mt-2 text-sm font-semibold text-slate-500">{portalLabel} Portal</p>
           </div>
         </div>
         <div className="p-6">
           <div className="mb-6">
             <h1 className="mt-2 text-3xl font-black text-ink">
-              {isAdmin ? "Admin Login" : "Student Login"}
+              {portalLabel} Login
             </h1>
           </div>
           {error && (
@@ -59,7 +57,7 @@ export default function LoginShell({ role }) {
           )}
           <form className="space-y-4" onSubmit={submit}>
             <div>
-              <label className="label">Username</label>
+              <label className="label">{isAdmin || isMentor ? "Username" : "Enrollment ID"}</label>
               <input
                 className="field"
                 value={form.username}
@@ -87,14 +85,21 @@ export default function LoginShell({ role }) {
               <FiLogIn /> {loading ? "Signing in..." : "Login"}
             </button>
           </form>
-          <div className="mt-5 flex items-center justify-between text-sm">
+          {!isAdmin && !isMentor && (
+            <div className="mt-4 text-center">
+              <Link className="text-sm font-semibold text-brand" to="/student/forgot-password">
+                Forgot Password?
+              </Link>
+            </div>
+          )}
+          <div className="mt-4 flex items-center justify-between text-sm">
             <Link
               className="font-semibold text-brand"
               to={isAdmin ? "/student/login" : "/admin/login"}
             >
               {isAdmin ? "Student login" : "Admin login"}
             </Link>
-            {isAdmin ? (
+            {isAdmin || isMentor ? (
               <span className="font-semibold text-slate-400">Secure access</span>
             ) : (
               <Link className="font-semibold text-brand" to="/student/register">
