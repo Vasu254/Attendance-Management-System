@@ -194,6 +194,7 @@ def mark_attendance():
         attendance_date=today,
         marked_time=now.time(),
         status="PRESENT",
+        tracker_type="CLASS",
         latitude=latitude,
         longitude=longitude,
         distance_meters=distance_meters,

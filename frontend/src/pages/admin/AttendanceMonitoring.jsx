@@ -7,11 +7,11 @@ const today = new Date().toISOString().slice(0, 10);
 
 export default function AttendanceMonitoring() {
   const [filters, setFilters] = useState({ date: today, search: "", batch: "", session_type: "" });
-  const [targetType, setTargetType] = useState("BOTH"); // "BOTH", "CLASS", or "MENTORING"
+  const [targetType, setTargetType] = useState("CLASS"); // "CLASS" (default), "MENTORING", or "BOTH"
   const [data, setData] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [updatingId, setUpdatingId] = useState(null);
+  const [updatingInfo, setUpdatingInfo] = useState(null); // { id: studentId, type: "CLASS" | "MENTORING" }
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const load = (customFilters = filters) => {
@@ -27,11 +27,13 @@ export default function AttendanceMonitoring() {
   const handleSessionTypeFilter = (sType) => {
     const nextFilters = { ...filters, session_type: sType };
     setFilters(nextFilters);
+    if (sType === "CLASS") setTargetType("CLASS");
+    else if (sType === "MENTORING") setTargetType("MENTORING");
     load(nextFilters);
   };
 
   const handleManualMark = async (studentId, status, specificTarget = targetType) => {
-    setUpdatingId(studentId);
+    setUpdatingInfo({ id: studentId, type: specificTarget });
     setMessage("");
     setError("");
     try {
@@ -46,7 +48,7 @@ export default function AttendanceMonitoring() {
     } catch (err) {
       setError(err.response?.data?.message || "Failed to update attendance.");
     } finally {
-      setUpdatingId(null);
+      setUpdatingInfo(null);
     }
   };
 
@@ -177,15 +179,8 @@ export default function AttendanceMonitoring() {
                 <p className="text-xs text-slate-500">Live progress breakdown for {data.date}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500">Mark Attendance For:</span>
+                <span className="text-xs font-bold text-slate-500">Bulk Target:</span>
                 <div className="inline-flex rounded-lg bg-slate-100 p-1 text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setTargetType("BOTH")}
-                    className={`px-3 py-1 rounded-md transition-all ${targetType === "BOTH" ? "bg-white text-ink shadow-sm" : "text-slate-600 hover:text-ink"}`}
-                  >
-                    Both (Class & Mentoring)
-                  </button>
                   <button
                     type="button"
                     onClick={() => setTargetType("CLASS")}
@@ -199,6 +194,13 @@ export default function AttendanceMonitoring() {
                     className={`px-3 py-1 rounded-md transition-all ${targetType === "MENTORING" ? "bg-white text-purple-700 shadow-sm" : "text-slate-600 hover:text-ink"}`}
                   >
                     Mentoring Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTargetType("BOTH")}
+                    className={`px-3 py-1 rounded-md transition-all ${targetType === "BOTH" ? "bg-white text-ink shadow-sm" : "text-slate-600 hover:text-ink"}`}
+                  >
+                    Both (Class & Mentoring)
                   </button>
                 </div>
               </div>
@@ -256,34 +258,34 @@ export default function AttendanceMonitoring() {
             <div className="flex items-center gap-2">
               <FiShield className="text-purple-600 text-lg" />
               <span className="text-sm font-bold text-ink">
-                Bulk Actions for <span className="underline">{targetLabel}</span> ({data.students.length} students):
+                Bulk Actions for <span className="font-extrabold text-brand underline">{targetLabel}</span> ({data.students.length} students):
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
                 disabled={bulkLoading || !data.students.length}
-                className="btn-secondary text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200"
+                className="btn-secondary text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200 font-bold"
                 onClick={() => handleBulkMark("PRESENT")}
               >
                 <FiUserCheck className="inline mr-1" /> Mark All Present
               </button>
               <button
                 disabled={bulkLoading || !data.students.length}
-                className="btn-secondary text-xs px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200"
+                className="btn-secondary text-xs px-3 py-1.5 bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200 font-bold"
                 onClick={() => handleBulkMark("PERMISSION")}
               >
                 <FiShield className="inline mr-1" /> Mark All Permission
               </button>
               <button
                 disabled={bulkLoading || !data.students.length}
-                className="btn-secondary text-xs px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200"
+                className="btn-secondary text-xs px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200 font-bold"
                 onClick={() => handleBulkMark("ABSENT")}
               >
                 <FiUserX className="inline mr-1" /> Mark All Absent
               </button>
               <button
                 disabled={bulkLoading || !data.students.length}
-                className="btn-secondary text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-200"
+                className="btn-secondary text-xs px-3 py-1.5 text-slate-600 hover:bg-slate-200 font-bold"
                 onClick={() => handleBulkMark("NOT MARKED")}
               >
                 <FiRotateCcw className="inline mr-1" /> Reset Listed
@@ -299,60 +301,124 @@ export default function AttendanceMonitoring() {
                   <th>Student ID</th>
                   <th>Email</th>
                   <th>Batch</th>
-                  <th>Class Status</th>
-                  <th>Mentoring Status</th>
-                  <th className="text-center">Manual Mark ({targetType === "BOTH" ? "Both" : targetType === "CLASS" ? "Class" : "Mentoring"})</th>
+                  {filters.session_type !== "MENTORING" && (
+                    <th className="text-center min-w-[240px]">
+                      <span className="text-emerald-700 flex items-center justify-center gap-1 font-bold">
+                        <FiCalendar /> Class Attendance
+                      </span>
+                    </th>
+                  )}
+                  {filters.session_type !== "CLASS" && (
+                    <th className="text-center min-w-[240px]">
+                      <span className="text-purple-700 flex items-center justify-center gap-1 font-bold">
+                        <FiActivity /> Mentoring Attendance
+                      </span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.students.map((student) => (
-                  <tr key={student.id}>
-                    <td className="font-bold text-ink">{student.student_id}</td>
-                    <td>{student.email}</td>
-                    <td>{student.batch}</td>
-                    <td>{getStatusBadge(student.class_status, student.class_marked_time)}</td>
-                    <td>{getStatusBadge(student.mentoring_status, student.mentoring_marked_time)}</td>
-                    <td>
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          disabled={updatingId === student.id}
-                          onClick={() => handleManualMark(student.id, "PRESENT")}
-                          className="px-2.5 py-1 text-xs font-bold rounded-md border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-all"
-                          title={`Mark ${targetLabel} as Present`}
-                        >
-                          Present
-                        </button>
-                        <button
-                          disabled={updatingId === student.id}
-                          onClick={() => handleManualMark(student.id, "PERMISSION")}
-                          className="px-2.5 py-1 text-xs font-bold rounded-md border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 transition-all"
-                          title={`Grant Permission for ${targetLabel}`}
-                        >
-                          Permission
-                        </button>
-                        <button
-                          disabled={updatingId === student.id}
-                          onClick={() => handleManualMark(student.id, "ABSENT")}
-                          className="px-2.5 py-1 text-xs font-bold rounded-md border border-rose-300 bg-white text-rose-700 hover:bg-rose-50 transition-all"
-                          title={`Mark ${targetLabel} as Absent`}
-                        >
-                          Absent
-                        </button>
-                        <button
-                          disabled={updatingId === student.id}
-                          onClick={() => handleManualMark(student.id, "NOT MARKED")}
-                          className="px-2 py-1 text-xs font-medium rounded-md border border-slate-300 bg-white text-slate-500 hover:bg-slate-100"
-                          title={`Reset ${targetLabel} to Not Marked`}
-                        >
-                          <FiRotateCcw className="text-xs" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {data.students.map((student) => {
+                  const isUpdatingClass = updatingInfo?.id === student.id && (updatingInfo.type === "CLASS" || updatingInfo.type === "BOTH");
+                  const isUpdatingMentoring = updatingInfo?.id === student.id && (updatingInfo.type === "MENTORING" || updatingInfo.type === "BOTH");
+
+                  return (
+                    <tr key={student.id}>
+                      <td className="font-bold text-ink">{student.student_id}</td>
+                      <td>{student.email}</td>
+                      <td>{student.batch}</td>
+
+                      {/* Class Attendance Column */}
+                      {filters.session_type !== "MENTORING" && (
+                        <td className="text-center">
+                          <div className="flex flex-col items-center gap-1.5">
+                            {getStatusBadge(student.class_status, student.class_marked_time)}
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                disabled={isUpdatingClass}
+                                onClick={() => handleManualMark(student.id, "PRESENT", "CLASS")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
+                                title="Mark Class as Present"
+                              >
+                                Present
+                              </button>
+                              <button
+                                disabled={isUpdatingClass}
+                                onClick={() => handleManualMark(student.id, "PERMISSION", "CLASS")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-all"
+                                title="Grant Permission for Class"
+                              >
+                                Perm
+                              </button>
+                              <button
+                                disabled={isUpdatingClass}
+                                onClick={() => handleManualMark(student.id, "ABSENT", "CLASS")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-all"
+                                title="Mark Class as Absent"
+                              >
+                                Absent
+                              </button>
+                              <button
+                                disabled={isUpdatingClass}
+                                onClick={() => handleManualMark(student.id, "NOT MARKED", "CLASS")}
+                                className="px-1.5 py-0.5 text-[11px] font-medium rounded border border-slate-300 bg-white text-slate-500 hover:bg-slate-100"
+                                title="Reset Class to Not Marked"
+                              >
+                                <FiRotateCcw className="text-[10px]" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* Mentoring Attendance Column */}
+                      {filters.session_type !== "CLASS" && (
+                        <td className="text-center">
+                          <div className="flex flex-col items-center gap-1.5">
+                            {getStatusBadge(student.mentoring_status, student.mentoring_marked_time)}
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                disabled={isUpdatingMentoring}
+                                onClick={() => handleManualMark(student.id, "PRESENT", "MENTORING")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-all"
+                                title="Mark Mentoring as Present"
+                              >
+                                Present
+                              </button>
+                              <button
+                                disabled={isUpdatingMentoring}
+                                onClick={() => handleManualMark(student.id, "PERMISSION", "MENTORING")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 transition-all"
+                                title="Grant Permission for Mentoring"
+                              >
+                                Perm
+                              </button>
+                              <button
+                                disabled={isUpdatingMentoring}
+                                onClick={() => handleManualMark(student.id, "ABSENT", "MENTORING")}
+                                className="px-2 py-0.5 text-[11px] font-bold rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-all"
+                                title="Mark Mentoring as Absent"
+                              >
+                                Absent
+                              </button>
+                              <button
+                                disabled={isUpdatingMentoring}
+                                onClick={() => handleManualMark(student.id, "NOT MARKED", "MENTORING")}
+                                className="px-1.5 py-0.5 text-[11px] font-medium rounded border border-slate-300 bg-white text-slate-500 hover:bg-slate-100"
+                                title="Reset Mentoring to Not Marked"
+                              >
+                                <FiRotateCcw className="text-[10px]" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
                 {!data.students.length && (
                   <tr>
-                    <td colSpan="6" className="py-10 text-center text-slate-500">
+                    <td colSpan={filters.session_type ? 4 : 5} className="py-10 text-center text-slate-500">
                       No eligible students found.
                     </td>
                   </tr>

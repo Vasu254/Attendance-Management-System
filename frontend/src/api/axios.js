@@ -3,15 +3,14 @@ import axios from "axios";
 const resolveApiBaseUrl = () => {
   const configuredUrl = import.meta.env.VITE_API_URL;
   if (configuredUrl) return configuredUrl.replace(/\/$/, "");
-  if (typeof window === "undefined") return "http://localhost:5000/api";
-
-  const hostname = window.location.hostname || "localhost";
-  const protocol = window.location.protocol === "https:" ? "https:" : "http:";
-  return `${protocol}//${hostname}:5000/api`;
+  return "/api";
 };
 
 const api = axios.create({
   baseURL: resolveApiBaseUrl(),
+  headers: {
+    "Bypass-Tunnel-Reminder": "true",
+  },
 });
 
 api.interceptors.request.use((config) => {

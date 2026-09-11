@@ -716,7 +716,7 @@ def manual_mark_attendance():
     student_id = data.get("student_id")
     target_date = parse_date(data.get("date"), date.today())
     status = str(data.get("status") or "").upper().strip()
-    target_type = str(data.get("session_type") or data.get("target_type") or "BOTH").upper().strip()
+    target_type = str(data.get("session_type") or data.get("target_type") or "CLASS").upper().strip()
 
     if not student_id:
         return jsonify({"message": "Student ID is required."}), 400
@@ -804,7 +804,7 @@ def bulk_manual_mark_attendance():
     student_ids = data.get("student_ids") or []
     target_date = parse_date(data.get("date"), date.today())
     status = str(data.get("status") or "").upper().strip()
-    target_type = str(data.get("session_type") or data.get("target_type") or "BOTH").upper().strip()
+    target_type = str(data.get("session_type") or data.get("target_type") or "CLASS").upper().strip()
 
     if not student_ids:
         return jsonify({"message": "At least one student ID is required."}), 400

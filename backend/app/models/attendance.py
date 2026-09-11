@@ -5,7 +5,7 @@ from app.extensions import db
 
 class Attendance(db.Model):
     __tablename__ = "attendances"
-    __table_args__ = (db.UniqueConstraint("student_id", "attendance_date", name="uq_student_attendance_date"),)
+    __table_args__ = (db.UniqueConstraint("student_id", "attendance_date", "tracker_type", name="uq_student_attendance_tracker"),)
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey("students.id"), nullable=False, index=True)
