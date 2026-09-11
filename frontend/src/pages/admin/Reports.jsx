@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { FiDownload, FiSearch } from "react-icons/fi";
+import { FiDownload, FiSearch, FiCalendar, FiActivity } from "react-icons/fi";
 import api from "../../api/axios";
 import StatCard from "../../components/StatCard";
 
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Reports() {
-  const [filters, setFilters] = useState({ start_date: today, end_date: today, session_type: "CLASS", search: "", batch: "", section: "" });
+  const [filters, setFilters] = useState({ start_date: today, end_date: today, session_type: "CLASS", search: "", batch: "" });
   const [data, setData] = useState({ dates: [], daily_summary: [], rows: [], totals: {} });
   const [error, setError] = useState("");
 
@@ -22,12 +22,14 @@ export default function Reports() {
     load();
   }, []);
 
-  const exportCsv = () => {
-    api.get("/admin/reports/export", { params: filters, responseType: "blob" }).then((res) => {
+  const exportCsv = (overrideType = null) => {
+    const targetFilters = { ...filters, session_type: overrideType || filters.session_type };
+    api.get("/admin/reports/export", { params: targetFilters, responseType: "blob" }).then((res) => {
+      const typeLabel = targetFilters.session_type.toLowerCase();
       const url = URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `attendance_report_${filters.start_date}_to_${filters.end_date}.csv`;
+      link.download = `${typeLabel}_attendance_${targetFilters.start_date}_to_${targetFilters.end_date}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     }).catch((err) => setError(err.response?.data?.message || "Unable to export CSV"));
@@ -35,23 +37,56 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 xl:grid-cols-[170px_170px_160px_minmax(220px,1fr)_150px_150px_auto_auto]">
+      <div className="grid gap-3 xl:grid-cols-[160px_160px_150px_minmax(200px,1fr)_130px_auto]">
         <input className="field" type="date" value={filters.start_date} onChange={(e) => setFilters({ ...filters, start_date: e.target.value })} />
         <input className="field" type="date" value={filters.end_date} onChange={(e) => setFilters({ ...filters, end_date: e.target.value })} />
-        <select className="field" value={filters.session_type} onChange={(e) => setFilters({ ...filters, session_type: e.target.value })}><option value="CLASS">Class</option><option value="MENTORING">Mentoring</option><option value="ALL">All sessions</option></select>
+        <select className="field" value={filters.session_type} onChange={(e) => setFilters({ ...filters, session_type: e.target.value })}>
+          <option value="CLASS">Class Sessions</option>
+          <option value="MENTORING">Mentoring Sessions</option>
+          <option value="ALL">All Sessions</option>
+        </select>
         <div className="relative">
           <FiSearch className="pointer-events-none absolute left-3 top-3 text-slate-400" />
           <input
             className="field pl-9"
-            placeholder="Search student name or ID"
+            placeholder="Search student ID or email"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           />
         </div>
         <input className="field" placeholder="Batch" value={filters.batch} onChange={(e) => setFilters({ ...filters, batch: e.target.value })} />
-        <input className="field" placeholder="Section" value={filters.section} onChange={(e) => setFilters({ ...filters, section: e.target.value })} />
         <button className="btn-primary" onClick={load}>Run Report</button>
-        <button className="btn-secondary" onClick={exportCsv}><FiDownload /> CSV</button>
+      </div>
+
+      {/* CSV Export Button Options */}
+      <div className="surface p-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50/50">
+        <div className="flex items-center gap-2">
+          <FiDownload className="text-brand text-lg" />
+          <span className="text-sm font-bold text-ink">Download Dedicated CSV Reports:</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn-secondary text-xs px-3.5 py-2 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border-emerald-200 font-bold"
+            onClick={() => exportCsv("CLASS")}
+            title="Download Class Attendance CSV"
+          >
+            <FiCalendar className="inline mr-1 text-emerald-600" /> Class Attendance CSV
+          </button>
+          <button
+            className="btn-secondary text-xs px-3.5 py-2 bg-purple-50 text-purple-800 hover:bg-purple-100 border-purple-200 font-bold"
+            onClick={() => exportCsv("MENTORING")}
+            title="Download Mentoring Attendance CSV"
+          >
+            <FiActivity className="inline mr-1 text-purple-600" /> Mentoring Attendance CSV
+          </button>
+          <button
+            className="btn-secondary text-xs px-3.5 py-2 text-slate-700 bg-white hover:bg-slate-100 font-bold"
+            onClick={() => exportCsv("ALL")}
+            title="Download Combined Attendance CSV"
+          >
+            <FiDownload className="inline mr-1 text-slate-500" /> Combined All CSV
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -68,7 +103,7 @@ export default function Reports() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-bold text-ink">Daily Summary</h2>
+        <h2 className="text-lg font-bold text-ink">Daily Summary ({filters.session_type})</h2>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -109,16 +144,14 @@ export default function Reports() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-lg font-bold text-ink">Student Day By Day Report</h2>
+        <h2 className="text-lg font-bold text-ink">Student Day By Day Report ({filters.session_type})</h2>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
                 <th>Student ID</th>
-                <th>Name</th>
-                <th>Course</th>
+                <th>Email</th>
                 <th>Batch</th>
-                <th>Section</th>
                 <th>Present Days</th>
                 <th>Absent Days</th>
                 <th>Permission</th>
@@ -134,10 +167,8 @@ export default function Reports() {
               {data.rows.map((row) => (
                 <tr key={row.student_id} className={row.below_75 ? "bg-red-50/50" : ""}>
                   <td className="font-bold text-ink">{row.student_id}</td>
-                  <td>{row.full_name}</td>
-                  <td>{row.course}</td>
+                  <td>{row.email}</td>
                   <td>{row.batch}</td>
-                  <td>{row.section}</td>
                   <td>{row.present_days}</td>
                   <td>{row.absent_days}</td>
                   <td>{row.permission_days || 0}</td>
@@ -160,7 +191,7 @@ export default function Reports() {
               ))}
               {!data.rows.length && (
                 <tr>
-                <td colSpan={11 + data.dates.length} className="py-10 text-center text-slate-500">No report rows found.</td>
+                  <td colSpan={9 + data.dates.length} className="py-10 text-center text-slate-500">No report rows found.</td>
                 </tr>
               )}
             </tbody>

@@ -6,7 +6,7 @@ import StatCard from "../../components/StatCard";
 const today = new Date().toISOString().slice(0, 10);
 
 export default function AttendanceMonitoring() {
-  const [filters, setFilters] = useState({ date: today, search: "", course: "", batch: "", section: "", session_type: "" });
+  const [filters, setFilters] = useState({ date: today, search: "", batch: "", session_type: "" });
   const [targetType, setTargetType] = useState("BOTH"); // "BOTH", "CLASS", or "MENTORING"
   const [data, setData] = useState(null);
   const [message, setMessage] = useState("");
@@ -149,15 +149,13 @@ export default function AttendanceMonitoring() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[170px_1fr_160px_160px_160px_auto]">
+      <div className="grid gap-3 md:grid-cols-[170px_1fr_180px_auto]">
         <input className="field" type="date" value={filters.date} onChange={(e) => setFilters({ ...filters, date: e.target.value })} />
         <div className="relative">
           <FiSearch className="pointer-events-none absolute left-3 top-3 text-slate-400" />
-          <input className="field pl-9" placeholder="Search name or student ID" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
+          <input className="field pl-9" placeholder="Search student ID or email" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} />
         </div>
-        <input className="field" placeholder="Course" value={filters.course} onChange={(e) => setFilters({ ...filters, course: e.target.value })} />
         <input className="field" placeholder="Batch" value={filters.batch} onChange={(e) => setFilters({ ...filters, batch: e.target.value })} />
-        <input className="field" placeholder="Section" value={filters.section} onChange={(e) => setFilters({ ...filters, section: e.target.value })} />
         <button className="btn-primary" onClick={() => load()}>Filter</button>
       </div>
 
@@ -299,10 +297,8 @@ export default function AttendanceMonitoring() {
               <thead>
                 <tr>
                   <th>Student ID</th>
-                  <th>Name</th>
-                  <th>Course</th>
+                  <th>Email</th>
                   <th>Batch</th>
-                  <th>Section</th>
                   <th>Class Status</th>
                   <th>Mentoring Status</th>
                   <th className="text-center">Manual Mark ({targetType === "BOTH" ? "Both" : targetType === "CLASS" ? "Class" : "Mentoring"})</th>
@@ -312,10 +308,8 @@ export default function AttendanceMonitoring() {
                 {data.students.map((student) => (
                   <tr key={student.id}>
                     <td className="font-bold text-ink">{student.student_id}</td>
-                    <td>{student.full_name}</td>
-                    <td>{student.course}</td>
+                    <td>{student.email}</td>
                     <td>{student.batch}</td>
-                    <td>{student.section}</td>
                     <td>{getStatusBadge(student.class_status, student.class_marked_time)}</td>
                     <td>{getStatusBadge(student.mentoring_status, student.mentoring_marked_time)}</td>
                     <td>
@@ -358,7 +352,7 @@ export default function AttendanceMonitoring() {
                 ))}
                 {!data.students.length && (
                   <tr>
-                    <td colSpan="8" className="py-10 text-center text-slate-500">
+                    <td colSpan="6" className="py-10 text-center text-slate-500">
                       No eligible students found.
                     </td>
                   </tr>

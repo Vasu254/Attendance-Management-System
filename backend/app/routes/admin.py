@@ -354,17 +354,7 @@ def student_filter_values():
 @role_required("ADMIN")
 def create_student():
     data = request.get_json() or {}
-    required = [
-        "student_id",
-        "full_name",
-        "email",
-        "mobile_number",
-        "course",
-        "batch",
-        "section",
-        "username",
-        "password",
-    ]
+    required = ["student_id", "email", "batch", "username", "password"]
     missing = [field for field in required if not str(data.get(field, "")).strip()]
     if missing:
         return jsonify({"message": f"Missing fields: {', '.join(missing)}"}), 400
@@ -378,12 +368,12 @@ def create_student():
     student = Student(
         user=user,
         student_id=data["student_id"].strip(),
-        full_name=data["full_name"].strip(),
+        full_name=str(data.get("full_name") or data["student_id"]).strip(),
         email=data["email"].strip(),
-        mobile_number=data["mobile_number"].strip(),
-        course=data["course"].strip(),
+        mobile_number=str(data.get("mobile_number") or "").strip(),
+        course=str(data.get("course") or "N/A").strip(),
         batch=data["batch"].strip(),
-        section=data["section"].strip(),
+        section=str(data.get("section") or "N/A").strip(),
     )
     db.session.add(student)
     try:
@@ -620,7 +610,7 @@ def attendance_monitoring():
     target_date = parse_date(request.args.get("date"), date.today())
     session_type_filter = (request.args.get("session_type") or "").upper().strip()
     permission = latest_permission_for(target_date)
-    query = apply_student_filters(eligible_students_query(permission))
+    query = apply_student_filters(Student.query.join(Student.user).filter(User.role == "STUDENT", User.is_active.is_(True)))
     students = query.order_by(Student.created_at.asc(), Student.id.asc()).all()
 
     attendance_rows = Attendance.query.filter_by(attendance_date=target_date).all()
@@ -941,9 +931,8 @@ def report_data(start_date, end_date, session_type="CLASS"):
         rows.append({
             "student_id": student.student_id,
             "full_name": student.full_name,
-            "course": student.course,
+            "email": student.email,
             "batch": student.batch,
-            "section": student.section,
             "present_days": summary["present"],
             "absent_days": summary["absent"],
             "permission_days": summary["permission"],
@@ -996,10 +985,8 @@ def export_reports():
     output = StringIO()
     fieldnames = [
         "student_id",
-        "full_name",
-        "course",
+        "email",
         "batch",
-        "section",
         "present_days",
         "absent_days",
         "permission_days",
@@ -1019,10 +1006,8 @@ def export_reports():
     for row in data["rows"]:
         csv_row = {
             "student_id": row["student_id"],
-            "full_name": row["full_name"],
-            "course": row["course"],
+            "email": row["email"],
             "batch": row["batch"],
-            "section": row["section"],
             "present_days": row["present_days"],
             "absent_days": row["absent_days"],
             "permission_days": row.get("permission_days", 0),
