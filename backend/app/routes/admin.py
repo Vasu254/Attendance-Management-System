@@ -720,8 +720,8 @@ def manual_mark_attendance():
 
     if not student_id:
         return jsonify({"message": "Student ID is required."}), 400
-    if status not in {"PRESENT", "ABSENT", "PERMISSION", "NOT MARKED", "NOT_MARKED"}:
-        return jsonify({"message": "Status must be PRESENT, ABSENT, PERMISSION, or NOT MARKED."}), 400
+    if status not in {"PRESENT", "OFFLINE", "ONLINE", "ABSENT", "PERMISSION", "NOT MARKED", "NOT_MARKED"}:
+        return jsonify({"message": "Status must be PRESENT, OFFLINE, ONLINE, ABSENT, PERMISSION, or NOT MARKED."}), 400
 
     student = Student.query.get(student_id)
     if not student:
@@ -759,7 +759,7 @@ def manual_mark_attendance():
                 db.session.add(attendance)
             else:
                 attendance.status = status
-                if status in {"PRESENT", "PERMISSION"} and not attendance.marked_time:
+                if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not attendance.marked_time:
                     attendance.marked_time = now_time
 
             for s in applicable_sessions:
@@ -769,14 +769,14 @@ def manual_mark_attendance():
                         session_id=s.id,
                         student_id=student.id,
                         status=status,
-                        marked_time=now_time if status in {"PRESENT", "PERMISSION"} else None,
+                        marked_time=now_time if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} else None,
                         marked_by=current_actor_id(),
                     )
                     db.session.add(s_rec)
                 else:
                     s_rec.status = status
                     s_rec.marked_by = current_actor_id()
-                    if status in {"PRESENT", "PERMISSION"} and not s_rec.marked_time:
+                    if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not s_rec.marked_time:
                         s_rec.marked_time = now_time
 
     db.session.flush()
@@ -808,8 +808,8 @@ def bulk_manual_mark_attendance():
 
     if not student_ids:
         return jsonify({"message": "At least one student ID is required."}), 400
-    if status not in {"PRESENT", "ABSENT", "PERMISSION", "NOT MARKED", "NOT_MARKED"}:
-        return jsonify({"message": "Status must be PRESENT, ABSENT, PERMISSION, or NOT MARKED."}), 400
+    if status not in {"PRESENT", "OFFLINE", "ONLINE", "ABSENT", "PERMISSION", "NOT MARKED", "NOT_MARKED"}:
+        return jsonify({"message": "Status must be PRESENT, OFFLINE, ONLINE, ABSENT, PERMISSION, or NOT MARKED."}), 400
 
     students = Student.query.filter(Student.id.in_(student_ids)).all()
     if not students:
@@ -849,7 +849,7 @@ def bulk_manual_mark_attendance():
                     db.session.add(attendance)
                 else:
                     attendance.status = status
-                    if status in {"PRESENT", "PERMISSION"} and not attendance.marked_time:
+                    if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not attendance.marked_time:
                         attendance.marked_time = now_time
 
                 for s in applicable_sessions:
@@ -859,14 +859,14 @@ def bulk_manual_mark_attendance():
                             session_id=s.id,
                             student_id=student.id,
                             status=status,
-                            marked_time=now_time if status in {"PRESENT", "PERMISSION"} else None,
+                            marked_time=now_time if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} else None,
                             marked_by=current_actor_id(),
                         )
                         db.session.add(s_rec)
                     else:
                         s_rec.status = status
                         s_rec.marked_by = current_actor_id()
-                        if status in {"PRESENT", "PERMISSION"} and not s_rec.marked_time:
+                        if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not s_rec.marked_time:
                             s_rec.marked_time = now_time
         updated_count += 1
 
@@ -885,9 +885,16 @@ def bulk_manual_mark_attendance():
     })
 
 
+def format_sheet_date(d):
+    day = d.day
+    suffix = "th" if 11 <= day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+    return f"{day}{suffix} {d.strftime('%B %Y')}"
+
+
 def date_range(start_date, end_date):
     days = (end_date - start_date).days
     return [start_date + timedelta(days=offset) for offset in range(days + 1)]
+
 
 def report_data(start_date, end_date, session_type="CLASS"):
     """Sheet-safe report using the same service as every attendance percentage."""
@@ -899,13 +906,14 @@ def report_data(start_date, end_date, session_type="CLASS"):
     selected_type = None if session_type == "ALL" else session_type
     dates = date_range(start_date, end_date)
     query = apply_student_filters(Student.query.join(Student.user).filter(User.role == "STUDENT"))
-    # Preserve the existing enrollment order: never alphabetize report rows.
     students = query.order_by(Student.created_at.asc(), Student.id.asc()).all()
     rows = []
 
     for student in students:
         summary = student_summary(student, selected_type, start_date, end_date)
         records_by_date = {target_date: [] for target_date in dates}
+        
+        # 1. Gather from applicable sessions
         for session in applicable_sessions(student, selected_type, start_date, end_date):
             session_date = session.session_date if isinstance(session, AttendanceSession) else session.attendance_date
             status = session_status(student, session)
@@ -924,13 +932,29 @@ def report_data(start_date, end_date, session_type="CLASS"):
         daily_records = []
         for target_date in dates:
             day_records = records_by_date[target_date]
-            status = " / ".join(item[0] for item in day_records) if day_records else "NO SESSION"
+            if not day_records:
+                # 2. Check direct Attendance table record if not captured in sessions
+                direct_att = Attendance.query.filter(
+                    Attendance.student_id == student.id,
+                    Attendance.attendance_date == target_date,
+                    ((Attendance.tracker_type == (selected_type or "CLASS")) | Attendance.tracker_type.is_(None)),
+                ).first()
+                if direct_att:
+                    day_records = [(direct_att.status, direct_att.marked_time.strftime("%H:%M") if direct_att.marked_time else None)]
+
+            status = " / ".join(item[0] for item in day_records) if day_records else "NOT MARKED"
             marked_time = " / ".join(item[1] for item in day_records if item[1]) or None
-            daily_records.append({"date": target_date.isoformat(), "status": status, "marked_time": marked_time})
+            daily_records.append({
+                "date": target_date.isoformat(),
+                "formatted_date": format_sheet_date(target_date),
+                "status": status,
+                "marked_time": marked_time,
+            })
 
         rows.append({
+            "id": student.id,
             "student_id": student.student_id,
-            "full_name": student.full_name,
+            "full_name": student.full_name or student.student_id,
             "email": student.email,
             "batch": student.batch,
             "present_days": summary["present"],
@@ -947,17 +971,42 @@ def report_data(start_date, end_date, session_type="CLASS"):
     for target_date in dates:
         records = [record for row in rows for record in row["daily_records"] if record["date"] == target_date.isoformat()]
         split_statuses = [status for record in records for status in record["status"].split(" / ")]
-        present = split_statuses.count("PRESENT")
+        present = sum(1 for s in split_statuses if s in {"PRESENT", "OFFLINE", "ONLINE"})
         absent = split_statuses.count("ABSENT")
         permission = split_statuses.count("PERMISSION")
         holiday = split_statuses.count("HOLIDAY")
         total = present + absent
-        daily_summary.append({"date": target_date.isoformat(), "present": present, "absent": absent, "permission": permission, "holiday": holiday, "total_sessions": total, "percentage": round((present / total) * 100, 2) if total else 0})
+        daily_summary.append({
+            "date": target_date.isoformat(),
+            "formatted_date": format_sheet_date(target_date),
+            "present": present,
+            "absent": absent,
+            "permission": permission,
+            "holiday": holiday,
+            "total_sessions": total,
+            "percentage": round((present / total) * 100, 2) if total else 0,
+        })
 
     total_present = sum(row["present_days"] for row in rows)
     total_absent = sum(row["absent_days"] for row in rows)
     total_sessions = sum(row["total_sessions"] for row in rows)
-    return {"session_type": session_type, "dates": [target_date.isoformat() for target_date in dates], "daily_summary": daily_summary, "rows": rows, "totals": {"students": len(rows), "present_days": total_present, "absent_days": total_absent, "total_sessions": total_sessions, "percentage": round((total_present / total_sessions) * 100, 2) if total_sessions else 0}}
+    
+    formatted_dates = [{"date": d.isoformat(), "formatted": format_sheet_date(d), "day_name": d.strftime("%a")} for d in dates]
+
+    return {
+        "session_type": session_type,
+        "dates": [target_date.isoformat() for target_date in dates],
+        "date_headers": formatted_dates,
+        "daily_summary": daily_summary,
+        "rows": rows,
+        "totals": {
+            "students": len(rows),
+            "present_days": total_present,
+            "absent_days": total_absent,
+            "total_sessions": total_sessions,
+            "percentage": round((total_present / total_sessions) * 100, 2) if total_sessions else 0,
+        },
+    }
 
 
 @admin_bp.get("/reports")
@@ -983,20 +1032,18 @@ def export_reports():
         return jsonify({"message": str(error)}), 400
 
     output = StringIO()
+    date_header_map = {item["date"]: item["formatted"] for item in data["date_headers"]}
+    
     fieldnames = [
-        "student_id",
-        "email",
-        "batch",
-        "present_days",
-        "absent_days",
-        "permission_days",
-        "holiday_days",
-        "total_sessions",
-        "percentage",
-        "below_75",
+        "Name of the Student",
+        "Enrollment ID",
+        "Batch",
+        "Present Days",
+        "Absent Days",
+        "Attendance %",
     ]
-    for report_date in data["dates"]:
-        fieldnames.extend([f"{report_date} status", f"{report_date} marked_time"])
+    for d in data["dates"]:
+        fieldnames.append(date_header_map.get(d, d))
 
     writer = csv.DictWriter(
         output,
@@ -1005,23 +1052,20 @@ def export_reports():
     writer.writeheader()
     for row in data["rows"]:
         csv_row = {
-            "student_id": row["student_id"],
-            "email": row["email"],
-            "batch": row["batch"],
-            "present_days": row["present_days"],
-            "absent_days": row["absent_days"],
-            "permission_days": row.get("permission_days", 0),
-            "holiday_days": row.get("holiday_days", 0),
-            "total_sessions": row["total_sessions"],
-            "percentage": row["percentage"],
-            "below_75": row["below_75"],
+            "Name of the Student": row["full_name"],
+            "Enrollment ID": row["student_id"],
+            "Batch": row["batch"],
+            "Present Days": row["present_days"],
+            "Absent Days": row["absent_days"],
+            "Attendance %": f"{row['percentage']}%",
         }
         for record in row["daily_records"]:
-            csv_row[f"{record['date']} status"] = record["status"]
-            csv_row[f"{record['date']} marked_time"] = record["marked_time"] or ""
+            col_name = date_header_map.get(record["date"], record["date"])
+            csv_row[col_name] = record["status"]
         writer.writerow(csv_row)
+        
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={data['session_type'].title()}_Attendance_{start_date.isoformat()}.csv"},
+        headers={"Content-Disposition": f"attachment; filename={data['session_type'].title()}_Attendance_Report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"},
     )

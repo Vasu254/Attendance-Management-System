@@ -131,7 +131,7 @@ def student_summary(student, session_type=None, start_date=None, end_date=None):
             totals["permission"] += 1
             continue
         totals["total_sessions"] += 1
-        if status == "PRESENT":
+        if status in {"PRESENT", "OFFLINE", "ONLINE"}:
             totals["present"] += 1
             totals["credited"] += 1
         elif status == "PERMISSION":
