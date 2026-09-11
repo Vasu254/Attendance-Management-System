@@ -9,5 +9,19 @@ from .system_setting import SystemSetting
 from .student_permission import StudentPermission
 from .student import Student
 from .user import User
+from .mock_interview import MockInterviewFeedback
 
-__all__ = ["Attendance", "AttendancePermission", "AttendanceSession", "SessionAttendance", "Holiday", "PermissionRequest", "StudentPermission", "ActivityLog", "SystemSetting", "Student", "User"]
+__all__ = [
+    "Attendance",
+    "AttendancePermission",
+    "AttendanceSession",
+    "SessionAttendance",
+    "Holiday",
+    "PermissionRequest",
+    "StudentPermission",
+    "ActivityLog",
+    "SystemSetting",
+    "Student",
+    "User",
+    "MockInterviewFeedback",
+]

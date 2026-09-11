@@ -14,10 +14,12 @@ import SessionManagement from "./pages/admin/SessionManagement";
 import AttendanceControls from "./pages/admin/AttendanceControls";
 import AttendanceMonitoring from "./pages/admin/AttendanceMonitoring";
 import Reports from "./pages/admin/Reports";
+import MockInterviews from "./pages/admin/MockInterviews";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import SessionMarkAttendance from "./pages/student/SessionMarkAttendance";
 import PermissionRequests from "./pages/student/PermissionRequests";
 import AttendanceHistory from "./pages/student/AttendanceHistory";
+import StudentMockFeedback from "./pages/student/StudentMockFeedback";
 import Profile from "./pages/student/Profile";
 import MentorDashboard from "./pages/mentor/MentorDashboard";
 
@@ -40,6 +42,7 @@ export default function App() {
           <Route path="/admin/attendance-controls" element={<AttendanceControls />} />
           <Route path="/admin/attendance-monitoring" element={<AttendanceMonitoring />} />
           <Route path="/admin/reports" element={<Reports />} />
+          <Route path="/admin/mock-interviews" element={<MockInterviews />} />
         </Route>
       </Route>
       <Route element={<StudentRoute />}>
@@ -48,6 +51,7 @@ export default function App() {
           <Route path="/student/mark-attendance" element={<SessionMarkAttendance />} />
           <Route path="/student/permission-requests" element={<PermissionRequests />} />
           <Route path="/student/attendance-history" element={<AttendanceHistory />} />
+          <Route path="/student/mock-feedback" element={<StudentMockFeedback />} />
           <Route path="/student/profile" element={<Profile />} />
         </Route>
       </Route>

@@ -13,8 +13,12 @@ def get_current_user():
     return User.query.get(int(identity))
 
 
-def role_required(role):
-    allowed_roles = {role} if isinstance(role, str) else set(role)
+def role_required(*roles):
+    if len(roles) == 1 and isinstance(roles[0], (list, tuple, set)):
+        allowed_roles = set(roles[0])
+    else:
+        allowed_roles = set(roles)
+        
     def decorator(fn):
         @wraps(fn)
         @jwt_required()

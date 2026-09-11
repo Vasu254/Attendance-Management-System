@@ -12,10 +12,12 @@ const titles = {
   "/admin/attendance-controls": "Attendance Controls",
   "/admin/attendance-monitoring": "Attendance Monitoring",
   "/admin/reports": "Attendance Reports",
+  "/admin/mock-interviews": "Mock Interviews",
   "/student/dashboard": "Student Dashboard",
   "/student/mark-attendance": "Mark Attendance",
   "/student/permission-requests": "Permission Requests",
   "/student/attendance-history": "Attendance History",
+  "/student/mock-feedback": "Mock Interview Feedback",
   "/student/profile": "Profile",
 };
 

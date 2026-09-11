@@ -7,6 +7,7 @@ from .routes.admin import admin_bp
 from .routes.auth import auth_bp
 from .routes.health import health_bp
 from .routes.student import student_bp
+from .routes.mock_interview import mock_interview_bp
 from .utils.seed import seed_admin
 from .utils.schema import ensure_location_columns
 
@@ -24,6 +25,7 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(student_bp, url_prefix="/api/student")
+    app.register_blueprint(mock_interview_bp, url_prefix="/api")
 
     with app.app_context():
         db.create_all()

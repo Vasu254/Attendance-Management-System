@@ -7,6 +7,7 @@ import {
   FiHome,
   FiUser,
   FiUsers,
+  FiAward
 } from "react-icons/fi";
 
 const adminLinks = [
@@ -16,12 +17,14 @@ const adminLinks = [
   { to: "/admin/attendance-controls", label: "Controls", icon: FiClipboard },
   { to: "/admin/attendance-monitoring", label: "Attendance Monitoring", icon: FiCheckCircle },
   { to: "/admin/reports", label: "Reports", icon: FiBarChart2 },
+  { to: "/admin/mock-interviews", label: "Mock Interviews", icon: FiAward },
 ];
 
 const studentLinks = [
   { to: "/student/dashboard", label: "Dashboard", icon: FiHome },
   { to: "/student/mark-attendance", label: "Mark Attendance", icon: FiCheckCircle },
   { to: "/student/attendance-history", label: "My Attendance", icon: FiClipboard },
+  { to: "/student/mock-feedback", label: "Mock Feedback", icon: FiAward },
   { to: "/student/permission-requests", label: "Request Permission", icon: FiCalendar },
   { to: "/student/profile", label: "Profile", icon: FiUser },
 ];
@@ -29,6 +32,7 @@ const studentLinks = [
 const mentorLinks = [
   { to: "/mentor/dashboard", label: "Dashboard", icon: FiHome },
   { to: "/admin/attendance-permission", label: "My Sessions", icon: FiCalendar },
+  { to: "/admin/mock-interviews", label: "Mock Interviews", icon: FiAward },
 ];
 
 export default function Sidebar({ role, open, onClose }) {
