@@ -17,7 +17,9 @@ DEFAULT_CORS_ORIGINS = [
 
 def normalize_database_url(value):
     if value and value.startswith("postgres://"):
-        return value.replace("postgres://", "postgresql://", 1)
+        return value.replace("postgres://", "postgresql+psycopg://", 1)
+    elif value and value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
     return value
 
 

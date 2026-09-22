@@ -21,7 +21,7 @@ git push -u origin main
 If HTTPS asks for a password, use a GitHub Personal Access Token. GitHub does not accept normal account passwords for git pushes.
 
 ## 2. Deploy Backend On Render
-
+like
 1. Open Render and create a PostgreSQL database.
 2. Copy the database internal connection string.
 3. Create a new Web Service from the GitHub repository.
