@@ -19,7 +19,7 @@ def create_app():
     db.init_app(app)
     bcrypt.init_app(app)
     jwt.init_app(app)
-    CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}}, supports_credentials=True)
+    CORS(app, resources={r"/*": {"origins": app.config["CORS_ORIGINS"]}}, supports_credentials=True)
 
     app.register_blueprint(health_bp)                        # handles "/" and "/health"
     app.register_blueprint(health_bp, url_prefix="/api", name="health_api")  # handles "/api/health"
