@@ -6,3 +6,6 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[context.production.environment]
+  VITE_API_URL = "https://attendance-management-system-2-y809.onrender.com/api"
