@@ -21,7 +21,8 @@ def create_app():
     jwt.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}}, supports_credentials=True)
 
-    app.register_blueprint(health_bp, url_prefix="/api")
+    app.register_blueprint(health_bp)                        # handles "/" and "/health"
+    app.register_blueprint(health_bp, url_prefix="/api", name="health_api")  # handles "/api/health"
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(student_bp, url_prefix="/api/student")
