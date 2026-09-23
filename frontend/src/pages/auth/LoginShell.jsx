@@ -6,7 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 export default function LoginShell({ role }) {
   const { login, user } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ username: "", password: "" });
+  const [form, setForm] = useState({ username: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -57,16 +57,26 @@ export default function LoginShell({ role }) {
           )}
           <form className="space-y-4" onSubmit={submit}>
             <div>
-              <label className="label">{isAdmin || isMentor ? "Username" : "Enrollment ID"}</label>
-              <input
-                className="field"
-                value={form.username}
-                onChange={(event) =>
-                  setForm({ ...form, username: event.target.value })
-                }
-                autoComplete="username"
-                required
-              />
+              <label className="label">{isAdmin || isMentor ? "Username" : "Email Address"}</label>
+              {isAdmin || isMentor ? (
+                <input
+                  className="field"
+                  value={form.username}
+                  onChange={(event) => setForm({ ...form, username: event.target.value })}
+                  autoComplete="username"
+                  required
+                />
+              ) : (
+                <input
+                  className="field"
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  autoComplete="email"
+                  placeholder="your@email.com"
+                  required
+                />
+              )}
             </div>
             <div>
               <label className="label">Password</label>

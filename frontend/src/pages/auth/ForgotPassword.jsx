@@ -7,7 +7,6 @@ import { useAuth } from "../../context/AuthContext";
 export default function ForgotPassword() {
   const { user } = useAuth();
   const [form, setForm] = useState({
-    student_id: "",
     email: "",
     new_password: "",
     confirm_password: "",
@@ -33,7 +32,7 @@ export default function ForgotPassword() {
     try {
       const res = await api.post("/auth/student/forgot-password", form);
       setSuccess(res.data.message);
-      setForm({ student_id: "", email: "", new_password: "", confirm_password: "" });
+      setForm({ email: "", new_password: "", confirm_password: "" });
     } catch (err) {
       setError(err.response?.data?.message || "Unable to reset password");
     } finally {
@@ -54,7 +53,7 @@ export default function ForgotPassword() {
           <div className="mb-6">
             <h1 className="mt-2 text-3xl font-black text-ink">Forgot Password</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Enter your Enrollment ID and registered Email to reset your password.
+              Enter your registered Email to reset your password.
             </p>
           </div>
 
@@ -71,19 +70,11 @@ export default function ForgotPassword() {
 
           <form className="space-y-4" onSubmit={submit}>
             <div>
-              <label className="label">Enrollment ID</label>
-              <input
-                className="field"
-                value={form.student_id}
-                onChange={(e) => setForm({ ...form, student_id: e.target.value })}
-                required
-              />
-            </div>
-            <div>
               <label className="label">Registered Email</label>
               <input
                 className="field"
                 type="email"
+                placeholder="your@email.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required

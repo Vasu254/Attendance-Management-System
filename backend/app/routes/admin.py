@@ -46,8 +46,8 @@ def current_actor_id():
 
 def allowed_session_types(value):
     value = str(value or "CLASS").upper()
-    if value not in {"CLASS", "MENTORING"}:
-        raise ValueError("Session type must be CLASS or MENTORING")
+    if value not in {"CLASS", "MENTORING", "OTHER"}:
+        raise ValueError("Session type must be CLASS, MENTORING, or OTHER")
     return value
 
 
@@ -63,6 +63,7 @@ def list_sessions():
     start_date = parse_date(request.args.get("start_date"))
     end_date = parse_date(request.args.get("end_date"))
     session_type = (request.args.get("session_type") or "").upper()
+    status_filter = (request.args.get("status") or "").upper()
     query = AttendanceSession.query
     if get_current_user().role == "MENTOR":
         query = query.filter(AttendanceSession.mentor_id == current_actor_id())
@@ -70,9 +71,25 @@ def list_sessions():
         query = query.filter(AttendanceSession.session_date >= start_date)
     if end_date:
         query = query.filter(AttendanceSession.session_date <= end_date)
-    if session_type in {"CLASS", "MENTORING"}:
+    if session_type in {"CLASS", "MENTORING", "OTHER"}:
         query = query.filter_by(session_type=session_type)
-    return jsonify([session.to_dict() for session in query.order_by(AttendanceSession.session_date.desc(), AttendanceSession.id.desc()).all()])
+    if status_filter == "ACTIVE":
+        query = query.filter(AttendanceSession.status == "ACTIVE")
+    elif status_filter == "INACTIVE":
+        query = query.filter(AttendanceSession.status.in_(["SCHEDULED", "COMPLETED", "CANCELLED"]))
+    sessions = query.order_by(AttendanceSession.session_date.desc(), AttendanceSession.id.desc()).all()
+    result = []
+    for session in sessions:
+        d = session.to_dict()
+        eligible_ids = [s.id for s in eligible_students_query(session).all()]
+        d["total_eligible"] = len(eligible_ids)
+        d["present_count"] = SessionAttendance.query.filter(
+            SessionAttendance.session_id == session.id,
+            SessionAttendance.student_id.in_(eligible_ids) if eligible_ids else False,
+            SessionAttendance.status == "PRESENT",
+        ).count() if eligible_ids else 0
+        result.append(d)
+    return jsonify(result)
 
 
 @admin_bp.post("/sessions")
@@ -130,6 +147,79 @@ def close_session(session_id):
     log_activity(current_actor_id(), "CLOSED", "attendance_session", session.id, previous={"status": previous}, new={"status": "COMPLETED"})
     db.session.commit()
     return jsonify(session.to_dict())
+
+
+@admin_bp.get("/sessions/<int:session_id>")
+@role_required(("ADMIN", "MENTOR"))
+def get_session_detail(session_id):
+    session = AttendanceSession.query.get_or_404(session_id)
+    if not can_manage_session(session):
+        return jsonify({"message": "You can only view sessions assigned to you."}), 403
+    students = eligible_students_query(session).order_by(Student.created_at.asc(), Student.id.asc()).all()
+    records = {row.student_id: row for row in SessionAttendance.query.filter_by(session_id=session.id).all()}
+    roster = []
+    for student in students:
+        rec = records.get(student.id)
+        status = rec.status if rec else ("ABSENT" if session.session_date <= date.today() else "NOT_MARKED")
+        roster.append({
+            **student.to_dict(),
+            "status": status,
+            "marked_time": rec.marked_time.strftime("%H:%M") if rec and rec.marked_time else None,
+            "correction_reason": rec.correction_reason if rec else None,
+        })
+    present = sum(1 for r in roster if r["status"] in {"PRESENT", "OFFLINE", "ONLINE"})
+    absent = sum(1 for r in roster if r["status"] == "ABSENT")
+    permission = sum(1 for r in roster if r["status"] == "PERMISSION")
+    return jsonify({
+        "session": session.to_dict(),
+        "students": roster,
+        "summary": {"total": len(roster), "present": present, "absent": absent, "permission": permission},
+    })
+
+
+@admin_bp.get("/sessions/<int:session_id>/attendance")
+@role_required(("ADMIN", "MENTOR"))
+def get_session_attendance_roster(session_id):
+    """Lightweight roster endpoint – returns only student attendance status for this session."""
+    session = AttendanceSession.query.get_or_404(session_id)
+    if not can_manage_session(session):
+        return jsonify({"message": "You can only view sessions assigned to you."}), 403
+    students = eligible_students_query(session).order_by(Student.created_at.asc(), Student.id.asc()).all()
+    records = {row.student_id: row for row in SessionAttendance.query.filter_by(session_id=session.id).all()}
+    roster = []
+    for student in students:
+        rec = records.get(student.id)
+        status = rec.status if rec else ("ABSENT" if session.session_date <= date.today() else "NOT_MARKED")
+        roster.append({
+            "id": student.id,
+            "student_id": student.student_id,
+            "full_name": student.full_name or student.student_id,
+            "status": status,
+            "marked_time": rec.marked_time.strftime("%H:%M") if rec and rec.marked_time else None,
+        })
+    return jsonify(roster)
+
+
+@admin_bp.delete("/sessions/<int:session_id>")
+@role_required(("ADMIN", "MENTOR"))
+def delete_session(session_id):
+    """Deletes a session and its session_attendances (cascade). Legacy Attendance table is unaffected."""
+    session = AttendanceSession.query.get_or_404(session_id)
+    if not can_manage_session(session):
+        return jsonify({"message": "You can only delete sessions assigned to you."}), 403
+    snapshot = session.to_dict()
+    snapshot["student_count"] = len(session.records)
+    # cascade="all, delete-orphan" on AttendanceSession.records automatically deletes
+    # all SessionAttendance rows for this session when the session is deleted.
+    db.session.delete(session)
+    db.session.flush()
+    log_activity(
+        current_actor_id(), "DELETED", "attendance_session", session_id,
+        previous=snapshot,
+        reason=f"Session deleted: {snapshot.get('session_type')} on {snapshot.get('session_date')}",
+    )
+    db.session.commit()
+    return jsonify({"message": "Session and its attendance records have been deleted.", "deleted_session_id": session_id})
 
 
 @admin_bp.put("/sessions/<int:session_id>/attendance/<int:student_pk>")
@@ -1026,6 +1116,10 @@ def reports():
 def export_reports():
     start_date = parse_date(request.args.get("start_date"), date.today())
     end_date = parse_date(request.args.get("end_date"), date.today())
+    include_id = request.args.get("include_id", "false").lower() == "true"
+    status_only = request.args.get("status_only", "false").lower() == "true"
+    single_date = request.args.get("date")
+
     try:
         data = report_data(start_date, end_date, (request.args.get("session_type") or "CLASS").upper())
     except ValueError as error:
@@ -1033,39 +1127,45 @@ def export_reports():
 
     output = StringIO()
     date_header_map = {item["date"]: item["formatted"] for item in data["date_headers"]}
-    
-    fieldnames = [
-        "Name of the Student",
-        "Enrollment ID",
-        "Batch",
-        "Present Days",
-        "Absent Days",
-        "Attendance %",
-    ]
-    for d in data["dates"]:
-        fieldnames.append(date_header_map.get(d, d))
 
-    writer = csv.DictWriter(
-        output,
-        fieldnames=fieldnames,
-    )
-    writer.writeheader()
-    for row in data["rows"]:
-        csv_row = {
-            "Name of the Student": row["full_name"],
-            "Enrollment ID": row["student_id"],
-            "Batch": row["batch"],
-            "Present Days": row["present_days"],
-            "Absent Days": row["absent_days"],
-            "Attendance %": f"{row['percentage']}%",
-        }
-        for record in row["daily_records"]:
-            col_name = date_header_map.get(record["date"], record["date"])
-            csv_row[col_name] = record["status"]
-        writer.writerow(csv_row)
-        
+    if status_only and single_date:
+        # Export only status column without names
+        target_label = date_header_map.get(single_date, single_date)
+        fieldnames = [target_label]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data["rows"]:
+            rec = next((r for r in row["daily_records"] if r["date"] == single_date), None)
+            writer.writerow({target_label: rec["status"] if rec else "NOT_MARKED"})
+        filename = f"Attendance_{single_date}_Status_Only.csv"
+    else:
+        fieldnames = ["Full Name"]
+        if include_id:
+            fieldnames.append("Enrollment ID")
+        fieldnames.extend(["Batch", "Present Days", "Absent Days", "Attendance %"])
+        for d in data["dates"]:
+            fieldnames.append(date_header_map.get(d, d))
+
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in data["rows"]:
+            csv_row = {
+                "Full Name": row["full_name"],
+                "Batch": row["batch"],
+                "Present Days": row["present_days"],
+                "Absent Days": row["absent_days"],
+                "Attendance %": f"{row['percentage']}%",
+            }
+            if include_id:
+                csv_row["Enrollment ID"] = row["student_id"]
+            for record in row["daily_records"]:
+                col_name = date_header_map.get(record["date"], record["date"])
+                csv_row[col_name] = record["status"]
+            writer.writerow(csv_row)
+        filename = f"{data['session_type'].title()}_Attendance_Report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"
+
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={data['session_type'].title()}_Attendance_Report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"},
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

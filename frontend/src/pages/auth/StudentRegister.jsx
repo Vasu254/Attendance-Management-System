@@ -4,6 +4,7 @@ import { FiArrowLeft, FiUserPlus } from "react-icons/fi";
 import { useAuth } from "../../context/AuthContext";
 
 const blank = {
+  full_name: "",
   student_id: "",
   email: "",
   batch: "",
@@ -67,13 +68,15 @@ export default function StudentRegister() {
           )}
 
           <form className="space-y-4" onSubmit={submit}>
-            <Input label="Enrollment Number" value={form.student_id} onChange={(value) => update("student_id", value)} />
-            <Input label="Email" type="email" value={form.email} onChange={(value) => update("email", value)} />
-            <Input label="Batch Number" value={form.batch} onChange={(value) => update("batch", value)} />
-            <Input label="Password" type="password" value={form.password} onChange={(value) => update("password", value)} />
+            <Input label="Full Name" placeholder="e.g. Rahul Sharma" value={form.full_name} onChange={(value) => update("full_name", value)} />
+            <Input label="Enrollment Number" placeholder="e.g. FS202601" value={form.student_id} onChange={(value) => update("student_id", value)} />
+            <Input label="Email Address" type="email" placeholder="student@example.com" value={form.email} onChange={(value) => update("email", value)} />
+            <Input label="Batch Number" placeholder="e.g. BATCH-24" value={form.batch} onChange={(value) => update("batch", value)} />
+            <Input label="Password" type="password" placeholder="At least 6 characters" value={form.password} onChange={(value) => update("password", value)} />
             <Input
               label="Confirm Password"
               type="password"
+              placeholder="Re-enter password"
               value={form.confirm_password}
               onChange={(value) => update("confirm_password", value)}
             />
@@ -87,11 +90,18 @@ export default function StudentRegister() {
   );
 }
 
-function Input({ label, value, onChange, type = "text" }) {
+function Input({ label, value, onChange, type = "text", placeholder = "" }) {
   return (
     <div>
       <label className="label">{label}</label>
-      <input className="field" type={type} value={value} onChange={(event) => onChange(event.target.value)} required />
+      <input
+        className="field"
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+      />
     </div>
   );
 }

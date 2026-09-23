@@ -38,6 +38,7 @@ export default function App() {
           <Route path="/mentor/dashboard" element={<MentorDashboard />} />
           <Route path="/admin/students" element={<StudentManagement />} />
           <Route path="/admin/students/add" element={<AddStudent />} />
+          <Route path="/admin/sessions" element={<SessionManagement />} />
           <Route path="/admin/attendance-permission" element={<SessionManagement />} />
           <Route path="/admin/attendance-controls" element={<AttendanceControls />} />
           <Route path="/admin/attendance-monitoring" element={<AttendanceMonitoring />} />

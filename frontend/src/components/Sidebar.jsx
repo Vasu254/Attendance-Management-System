@@ -7,13 +7,14 @@ import {
   FiHome,
   FiUser,
   FiUsers,
-  FiAward
+  FiAward,
+  FiLayers
 } from "react-icons/fi";
 
 const adminLinks = [
   { to: "/admin/dashboard", label: "Dashboard", icon: FiHome },
   { to: "/admin/students", label: "Students", icon: FiUsers },
-  { to: "/admin/attendance-permission", label: "Sessions", icon: FiCalendar },
+  { to: "/admin/sessions", label: "Sessions", icon: FiLayers },
   { to: "/admin/attendance-controls", label: "Controls", icon: FiClipboard },
   { to: "/admin/attendance-monitoring", label: "Attendance Monitoring", icon: FiCheckCircle },
   { to: "/admin/reports", label: "Reports", icon: FiBarChart2 },
@@ -31,7 +32,7 @@ const studentLinks = [
 
 const mentorLinks = [
   { to: "/mentor/dashboard", label: "Dashboard", icon: FiHome },
-  { to: "/admin/attendance-permission", label: "My Sessions", icon: FiCalendar },
+  { to: "/admin/sessions", label: "My Sessions", icon: FiLayers },
   { to: "/admin/mock-interviews", label: "Mock Interviews", icon: FiAward },
 ];
 
