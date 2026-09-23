@@ -3,13 +3,18 @@ import { FiCrosshair, FiLock, FiMapPin, FiTarget, FiUnlock } from "react-icons/f
 import api from "../../api/axios";
 
 const today = new Date().toISOString().slice(0, 10);
+const nowHour = new Date().getHours();
+const pad = (n) => String(n).padStart(2, "0");
+const defaultStart = `${pad(nowHour)}:00`;
+const defaultEnd = `${pad((nowHour + 2) % 24)}:00`;
 
 export default function AttendancePermission() {
   const [permission, setPermission] = useState(null);
+  const [batches, setBatches] = useState([]);
   const [form, setForm] = useState({
     attendance_date: today,
-    start_time: "09:00",
-    end_time: "10:00",
+    start_time: defaultStart,
+    end_time: defaultEnd,
     status: "OPEN",
     batch: "",
     section: "",
@@ -27,6 +32,9 @@ export default function AttendancePermission() {
 
   useEffect(() => {
     load();
+    api.get("/admin/students/filters").then((res) => {
+      if (res.data?.batches) setBatches(res.data.batches);
+    }).catch(() => {});
   }, []);
 
   const create = async (event) => {
@@ -123,7 +131,18 @@ export default function AttendancePermission() {
           </div>
           <div>
             <label className="label">Batch</label>
-            <input className="field" placeholder="All batches" value={form.batch} onChange={(e) => setForm({ ...form, batch: e.target.value })} />
+            <input
+              className="field"
+              list="batch-options"
+              placeholder="All batches (e.g. 64)"
+              value={form.batch}
+              onChange={(e) => setForm({ ...form, batch: e.target.value })}
+            />
+            <datalist id="batch-options">
+              {batches.map((b) => (
+                <option key={b} value={b} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="label">Section</label>

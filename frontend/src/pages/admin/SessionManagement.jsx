@@ -7,8 +7,13 @@ import {
 import api from "../../api/axios";
 
 const today = new Date().toISOString().slice(0, 10);
+const nowHour = new Date().getHours();
+const pad = (n) => String(n).padStart(2, "0");
+const defaultStart = `${pad(nowHour)}:00`;
+const defaultEnd = `${pad((nowHour + 2) % 24)}:00`;
+
 const blank = {
-  session_date: today, start_time: "09:00", end_time: "10:00",
+  session_date: today, start_time: defaultStart, end_time: defaultEnd,
   session_type: "CLASS", batch: "", section: "", subject: "", room: "", mentor_id: ""
 };
 
@@ -59,6 +64,7 @@ export default function SessionManagement() {
   const [form, setForm]         = useState(blank);
   const [sessions, setSessions] = useState([]);
   const [mentors, setMentors]   = useState([]);
+  const [batches, setBatches]   = useState([]);
   const [loading, setLoading]   = useState(false);
   const [message, setMessage]   = useState("");
   const [error, setError]       = useState("");
@@ -93,6 +99,9 @@ export default function SessionManagement() {
   useEffect(() => { loadSessions(tab); }, [tab]);
   useEffect(() => {
     api.get("/admin/mentors").then((res) => setMentors(res.data)).catch(() => setMentors([]));
+    api.get("/admin/students/filters").then((res) => {
+      if (res.data?.batches) setBatches(res.data.batches);
+    }).catch(() => {});
   }, []);
 
   // ── Create Session ────────────────────────────────────────────────────────────
@@ -220,7 +229,14 @@ export default function SessionManagement() {
             </label>
             <Field label="Start time" type="time" value={form.start_time} onChange={(v) => setForm({ ...form, start_time: v })} />
             <Field label="End time"   type="time" value={form.end_time}   onChange={(v) => setForm({ ...form, end_time: v })} />
-            <Field label="Batch"    placeholder="All batches"   value={form.batch}    onChange={(v) => setForm({ ...form, batch: v })}    required={false} />
+            <div>
+              <Field label="Batch" placeholder="All batches (e.g. 64)" list="session-batch-list" value={form.batch} onChange={(v) => setForm({ ...form, batch: v })} required={false} />
+              <datalist id="session-batch-list">
+                {batches.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
+            </div>
             <Field label="Section"  placeholder="All sections"  value={form.section}  onChange={(v) => setForm({ ...form, section: v })}  required={false} />
             <Field label="Subject / topic"     placeholder="Optional" value={form.subject} onChange={(v) => setForm({ ...form, subject: v })} required={false} />
             <Field label="Room / online link"  placeholder="Optional" value={form.room}    onChange={(v) => setForm({ ...form, room: v })}    required={false} />
@@ -568,7 +584,7 @@ function SummaryPill({ label, value, color, icon: Icon }) {
 }
 
 // ─── Field Helper ──────────────────────────────────────────────────────────────
-function Field({ label, value, onChange, type = "text", placeholder, required = true }) {
+function Field({ label, value, onChange, type = "text", placeholder, required = true, list }) {
   return (
     <label>
       <span className="label">{label}</span>
@@ -578,6 +594,7 @@ function Field({ label, value, onChange, type = "text", placeholder, required = 
         value={value}
         placeholder={placeholder}
         required={required}
+        list={list}
         onChange={(e) => onChange(e.target.value)}
       />
     </label>

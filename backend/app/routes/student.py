@@ -25,20 +25,15 @@ def parse_date(value, fallback=None):
 
 
 def permission_payload(student, permission):
-    now = datetime.now()
     today = date.today()
     already_marked = False
-    eligible = student_is_eligible(student, permission)
-    within_window = False
-    if permission and permission.attendance_date == today:
-        within_window = permission.start_time <= now.time() <= permission.end_time
-    attendance = Attendance.query.filter_by(student_id=student.id, attendance_date=today).first()
+    eligible = student_is_eligible(student, permission) if (student and permission) else False
+    attendance = Attendance.query.filter_by(student_id=student.id, attendance_date=today).first() if student else None
     already_marked = attendance is not None
     can_mark = (
         bool(permission)
         and permission.status == "OPEN"
         and permission.attendance_date == today
-        and within_window
         and eligible
         and not already_marked
     )
@@ -46,7 +41,7 @@ def permission_payload(student, permission):
         "permission": permission.to_dict() if permission else None,
         "status": permission.status if permission else "CLOSED",
         "eligible": eligible,
-        "within_window": within_window,
+        "within_window": bool(permission and permission.status == "OPEN"),
         "already_marked": already_marked,
         "can_mark": can_mark,
         "today_attendance": attendance.to_dict() if attendance else None,
@@ -54,10 +49,18 @@ def permission_payload(student, permission):
 
 
 def active_session_payload(student, session):
-    now = datetime.now()
     record = SessionAttendance.query.filter_by(session_id=session.id, student_id=student.id).first()
-    within_window = session.session_date == date.today() and session.start_time <= now.time() <= session.end_time
-    return {**session.to_dict(), "eligible": student_is_eligible(student, session), "within_window": within_window, "already_marked": bool(record), "today_attendance": record.to_dict() if record else None, "can_mark": session.status == "ACTIVE" and within_window and student_is_eligible(student, session) and not record}
+    eligible = student_is_eligible(student, session)
+    already_marked = bool(record)
+    can_mark = session.status == "ACTIVE" and session.session_date == date.today() and eligible and not already_marked
+    return {
+        **session.to_dict(),
+        "eligible": eligible,
+        "within_window": True,
+        "already_marked": already_marked,
+        "today_attendance": record.to_dict() if record else None,
+        "can_mark": can_mark,
+    }
 
 
 @student_bp.get("/dashboard")
@@ -65,7 +68,7 @@ def active_session_payload(student, session):
 def dashboard():
     student = current_student()
     today = date.today()
-    permission = latest_permission_for(today)
+    permission = latest_permission_for(today, student=student)
     today_attendance = Attendance.query.filter_by(student_id=student.id, attendance_date=today).first()
     summary = split_summary(student)
     active_sessions = [active_session_payload(student, session) for session in AttendanceSession.query.filter_by(status="ACTIVE", session_date=today).order_by(AttendanceSession.session_type, AttendanceSession.start_time).all() if student_is_eligible(student, session)]
@@ -101,7 +104,7 @@ def active_sessions():
 @role_required("STUDENT")
 def attendance_permission():
     student = current_student()
-    permission = latest_permission_for(date.today())
+    permission = latest_permission_for(date.today(), student=student)
     return jsonify(permission_payload(student, permission))
 
 
@@ -120,7 +123,7 @@ def mark_attendance():
         if not session:
             return jsonify({"message": "Attendance session was not found."}), 404
         now = datetime.now()
-        if session.status != "ACTIVE" or session.session_date != date.today() or not (session.start_time <= now.time() <= session.end_time):
+        if session.status != "ACTIVE" or session.session_date != date.today():
             return jsonify({"message": "This session is no longer active."}), 400
         if not student_is_eligible(student, session):
             return jsonify({"message": "You are not eligible for this attendance session."}), 403
@@ -148,17 +151,15 @@ def mark_attendance():
 
     today = date.today()
     now = datetime.now()
-    permission = latest_permission_for(today)
+    permission = latest_permission_for(today, student=student)
     if not permission:
-        return jsonify({"message": "Attendance permission is not available"}), 400
+        return jsonify({"message": "Attendance permission is not available for your batch."}), 400
     if permission.status != "OPEN":
-        return jsonify({"message": "Attendance is closed"}), 400
+        return jsonify({"message": "Attendance is closed."}), 400
     if permission.attendance_date != today:
-        return jsonify({"message": "Attendance date does not match today"}), 400
-    if not (permission.start_time <= now.time() <= permission.end_time):
-        return jsonify({"message": "Attendance is outside the allowed time window"}), 400
+        return jsonify({"message": "Attendance date does not match today."}), 400
     if not student_is_eligible(student, permission):
-        return jsonify({"message": "You are not eligible for this attendance session"}), 403
+        return jsonify({"message": "You are not eligible for this attendance session."}), 403
     if Attendance.query.filter_by(student_id=student.id, attendance_date=today).first():
         return jsonify({"message": "ATTENDANCE ALREADY MARKED TODAY"}), 409
 

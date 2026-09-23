@@ -4,7 +4,7 @@ from datetime import date
 from sqlalchemy import and_, or_
 
 from app.models import Attendance, AttendancePermission, AttendanceSession, Holiday, PermissionRequest, SessionAttendance, StudentPermission, SystemSetting
-from app.utils.attendance import student_is_eligible
+from app.utils.attendance import batches_match, student_is_eligible
 
 
 def permission_policy():
@@ -23,7 +23,7 @@ def is_holiday(student, session_date, session_type):
         | (Holiday.holiday_date == session_date)
     ).all()
     return any(
-        (not holiday.batch or holiday.batch == student.batch)
+        (not holiday.batch or batches_match(holiday.batch, student.batch))
         and (not (holiday.session_type or holiday.tracker_type) or (holiday.session_type or holiday.tracker_type) == session_type)
         for holiday in holidays
     )
