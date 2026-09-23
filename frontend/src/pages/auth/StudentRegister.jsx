@@ -68,10 +68,10 @@ export default function StudentRegister() {
           )}
 
           <form className="space-y-4" onSubmit={submit}>
-            <Input label="Full Name" placeholder="e.g. Rahul Sharma" value={form.full_name} onChange={(value) => update("full_name", value)} />
-            <Input label="Enrollment Number" placeholder="e.g. FS202601" value={form.student_id} onChange={(value) => update("student_id", value)} />
+            <Input label="Full Name" placeholder="Vasu Kumar" value={form.full_name} onChange={(value) => update("full_name", value)} />
+            <Input label="Enrollment Number" placeholder="FS202601" value={form.student_id} onChange={(value) => update("student_id", value)} />
             <Input label="Email Address" type="email" placeholder="student@example.com" value={form.email} onChange={(value) => update("email", value)} />
-            <Input label="Batch Number" placeholder="e.g. BATCH-24" value={form.batch} onChange={(value) => update("batch", value)} />
+            <Input label="Batch Number" placeholder="64" value={form.batch} onChange={(value) => update("batch", value)} />
             <Input label="Password" type="password" placeholder="At least 6 characters" value={form.password} onChange={(value) => update("password", value)} />
             <Input
               label="Confirm Password"
