@@ -87,18 +87,21 @@ def applicable_sessions(student, session_type=None, start_date=None, end_date=No
       * AttendanceSession rows with status ACTIVE, COMPLETED, or SCHEDULED
         (SCHEDULED sessions on a past date represent real planned classes that
         have not been activated yet — they still count as working days).
+      * Sessions where this student was explicitly marked in SessionAttendance,
+        regardless of batch filter.
       * Legacy AttendancePermission rows (CLASS-type only for CLASS queries,
         MENTORING-type only for MENTORING queries).
+      * Direct Attendance records manually marked by Admin for this student on dates
+        where no formal session exists yet.
 
     Does NOT include:
       * CANCELLED sessions.
       * Sessions on future dates with status SCHEDULED (not yet started).
-      * Sessions the student is not eligible for (wrong batch/section).
     """
     today = date.today()
+    created_d = student.created_at.date() if (student and student.created_at) else today
 
     # Include ACTIVE, COMPLETED, and SCHEDULED-past sessions.
-    # SCHEDULED-future sessions have no attendance impact yet.
     sessions_q = AttendanceSession.query.filter(
         or_(
             AttendanceSession.status.in_(["ACTIVE", "COMPLETED"]),
@@ -115,39 +118,53 @@ def applicable_sessions(student, session_type=None, start_date=None, end_date=No
     if end_date:
         sessions_q = sessions_q.filter(AttendanceSession.session_date <= end_date)
 
-    result = [
-        s
-        for s in sessions_q.order_by(
-            AttendanceSession.session_date.asc(), AttendanceSession.id.asc()
-        ).all()
-        if student_is_eligible(student, s)
-    ]
+    result = []
+    covered_dates = set()
 
-    # Old AttendancePermission rows were the original class sessions. Leave their
-    # records in the legacy table and count them as CLASS only.
-    if not session_type or session_type == "CLASS":
+    for s in sessions_q.order_by(
+        AttendanceSession.session_date.asc(), AttendanceSession.id.asc()
+    ).all():
+        has_rec = SessionAttendance.query.filter_by(session_id=s.id, student_id=student.id).first() is not None
+        if student_is_eligible(student, s) or has_rec:
+            result.append(s)
+            covered_dates.add((s.session_date, s.session_type))
+
+    # Old AttendancePermission rows were the original class sessions.
+    if not session_type or session_type in {"CLASS", "MENTORING"}:
+        target_legacy_type = session_type or "CLASS"
         legacy = AttendancePermission.query.all()
         for permission in legacy:
             permission_type = permission.tracker_type or "CLASS"
-            if (
-                (not start_date or permission.attendance_date >= start_date)
-                and (not end_date or permission.attendance_date <= end_date)
-                and permission_type == "CLASS"
-                and student_is_eligible(student, permission)
-            ):
+            if session_type and permission_type != session_type:
+                continue
+            if start_date and permission.attendance_date < start_date:
+                continue
+            if end_date and permission.attendance_date > end_date:
+                continue
+            has_att = Attendance.query.filter_by(
+                student_id=student.id,
+                attendance_date=permission.attendance_date,
+            ).first() is not None
+            # Only apply generic (batch=None) sessions if student was already enrolled or has a record
+            eligible = student_is_eligible(student, permission)
+            if eligible and (permission.batch or permission.attendance_date >= created_d or has_att):
                 result.append(permission)
+                covered_dates.add((permission.attendance_date, permission_type))
 
-    if not session_type or session_type == "MENTORING":
-        legacy = AttendancePermission.query.all()
-        for permission in legacy:
-            permission_type = permission.tracker_type or "CLASS"
-            if (
-                (not start_date or permission.attendance_date >= start_date)
-                and (not end_date or permission.attendance_date <= end_date)
-                and permission_type == "MENTORING"
-                and student_is_eligible(student, permission)
-            ):
-                result.append(permission)
+    # 3. Direct Attendance records (manually marked by Admin on any date)
+    att_q = Attendance.query.filter_by(student_id=student.id)
+    if start_date:
+        att_q = att_q.filter(Attendance.attendance_date >= start_date)
+    if end_date:
+        att_q = att_q.filter(Attendance.attendance_date <= end_date)
+
+    for att in att_q.order_by(Attendance.attendance_date.asc()).all():
+        att_type = att.tracker_type or "CLASS"
+        if session_type and att_type != session_type:
+            continue
+        if (att.attendance_date, att_type) not in covered_dates:
+            result.append(att)
+            covered_dates.add((att.attendance_date, att_type))
 
     return result
 
@@ -157,6 +174,13 @@ def session_status(student, session):
 
     Returns one of: PRESENT, ABSENT, PERMISSION, HOLIDAY, NOT_MARKED, OFFLINE, ONLINE.
     """
+    if isinstance(session, Attendance):
+        session_type = session.tracker_type or "CLASS"
+        session_date = session.attendance_date
+        if is_holiday(student, session_date, session_type):
+            return "HOLIDAY"
+        return session.status
+
     session_type = getattr(session, "session_type", "CLASS")
     session_date = session.session_date if isinstance(session, AttendanceSession) else session.attendance_date
 
@@ -167,10 +191,18 @@ def session_status(student, session):
         record = SessionAttendance.query.filter_by(session_id=session.id, student_id=student.id).first()
         if record:
             return record.status
+        # Fallback to direct Attendance record if recorded for this date and type
+        direct = Attendance.query.filter(
+            Attendance.student_id == student.id,
+            Attendance.attendance_date == session.session_date,
+            or_(Attendance.tracker_type == session.session_type, Attendance.tracker_type.is_(None)),
+        ).first()
+        if direct:
+            return direct.status
         if approved_permission(student, session):
             return "PERMISSION"
     else:
-        tracker_type = session.tracker_type or "CLASS"
+        tracker_type = getattr(session, "tracker_type", None) or "CLASS"
         record = Attendance.query.filter(
             Attendance.student_id == student.id,
             Attendance.attendance_date == session.attendance_date,

@@ -505,7 +505,11 @@ export default function Reports() {
               className="field text-xs py-1.5"
               type="date"
               value={filters.start_date}
-              onChange={(e) => setFilters({ ...filters, start_date: e.target.value })}
+              onChange={(e) => {
+                const next = { ...filters, start_date: e.target.value };
+                setFilters(next);
+                load(next);
+              }}
             />
           </div>
           <div>
@@ -514,7 +518,11 @@ export default function Reports() {
               className="field text-xs py-1.5"
               type="date"
               value={filters.end_date}
-              onChange={(e) => setFilters({ ...filters, end_date: e.target.value })}
+              onChange={(e) => {
+                const next = { ...filters, end_date: e.target.value };
+                setFilters(next);
+                load(next);
+              }}
             />
           </div>
           <div>
@@ -522,7 +530,11 @@ export default function Reports() {
             <select
               className="field text-xs py-1.5"
               value={filters.session_type}
-              onChange={(e) => setFilters({ ...filters, session_type: e.target.value })}
+              onChange={(e) => {
+                const next = { ...filters, session_type: e.target.value };
+                setFilters(next);
+                load(next);
+              }}
             >
               <option value="CLASS">Class Sessions</option>
               <option value="MENTORING">Mentoring Sessions</option>
@@ -547,7 +559,10 @@ export default function Reports() {
               className="field text-xs py-1.5"
               placeholder="Batch..."
               value={filters.batch}
-              onChange={(e) => setFilters({ ...filters, batch: e.target.value })}
+              onChange={(e) => {
+                const next = { ...filters, batch: e.target.value };
+                setFilters(next);
+              }}
             />
           </div>
           <div className="flex items-end">
@@ -734,7 +749,7 @@ export default function Reports() {
 
                     {/* Date Attendance Cells with Sheet Dropdown Badges */}
                     {row.daily_records?.map((record) => {
-                      const isUpdating = updatingCell === `${row.student_id}-${record.date}`;
+                      const isUpdating = updatingCell === `${row.student_id}_${record.date}`;
                       return (
                         <td
                           key={`${row.student_id}-${record.date}`}

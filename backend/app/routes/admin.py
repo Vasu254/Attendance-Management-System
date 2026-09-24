@@ -1,6 +1,6 @@
 import csv
 import json
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, time, timezone, timedelta
 from io import StringIO
 from collections import OrderedDict
 
@@ -850,8 +850,35 @@ def manual_mark_attendance():
                 db.session.add(attendance)
             else:
                 attendance.status = status
-                if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not attendance.marked_time:
-                    attendance.marked_time = now_time
+                attendance.marked_time = now_time
+
+            # Ensure an AttendanceSession exists on target_date for this batch & type
+            if not applicable_sessions:
+                session = AttendanceSession.query.filter_by(
+                    session_date=target_date,
+                    session_type=t_type,
+                    batch=student.batch,
+                ).first()
+                if not session:
+                    session = AttendanceSession.query.filter_by(
+                        session_date=target_date,
+                        session_type=t_type,
+                    ).first()
+                if not session:
+                    session = AttendanceSession(
+                        session_date=target_date,
+                        start_time=time(9, 0),
+                        end_time=time(18, 0),
+                        session_type=t_type,
+                        status="ACTIVE" if target_date == date.today() else "COMPLETED",
+                        batch=student.batch,
+                        section=student.section,
+                        subject=f"{t_type.title()} Session",
+                        created_by=current_actor_id() or 1,
+                    )
+                    db.session.add(session)
+                    db.session.flush()
+                applicable_sessions = [session]
 
             for s in applicable_sessions:
                 s_rec = SessionAttendance.query.filter_by(session_id=s.id, student_id=student.id).first()
@@ -867,7 +894,7 @@ def manual_mark_attendance():
                 else:
                     s_rec.status = status
                     s_rec.marked_by = current_actor_id()
-                    if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not s_rec.marked_time:
+                    if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"}:
                         s_rec.marked_time = now_time
 
     db.session.flush()
@@ -940,8 +967,35 @@ def bulk_manual_mark_attendance():
                     db.session.add(attendance)
                 else:
                     attendance.status = status
-                    if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not attendance.marked_time:
-                        attendance.marked_time = now_time
+                    attendance.marked_time = now_time
+
+                # Ensure an AttendanceSession exists on target_date for this student's batch & type
+                if not applicable_sessions:
+                    session = AttendanceSession.query.filter_by(
+                        session_date=target_date,
+                        session_type=t_type,
+                        batch=student.batch,
+                    ).first()
+                    if not session:
+                        session = AttendanceSession.query.filter_by(
+                            session_date=target_date,
+                            session_type=t_type,
+                        ).first()
+                    if not session:
+                        session = AttendanceSession(
+                            session_date=target_date,
+                            start_time=time(9, 0),
+                            end_time=time(18, 0),
+                            session_type=t_type,
+                            status="ACTIVE" if target_date == date.today() else "COMPLETED",
+                            batch=student.batch,
+                            section=student.section,
+                            subject=f"{t_type.title()} Session",
+                            created_by=current_actor_id() or 1,
+                        )
+                        db.session.add(session)
+                        db.session.flush()
+                    applicable_sessions = [session]
 
                 for s in applicable_sessions:
                     s_rec = SessionAttendance.query.filter_by(session_id=s.id, student_id=student.id).first()
@@ -957,7 +1011,7 @@ def bulk_manual_mark_attendance():
                     else:
                         s_rec.status = status
                         s_rec.marked_by = current_actor_id()
-                        if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"} and not s_rec.marked_time:
+                        if status in {"PRESENT", "OFFLINE", "ONLINE", "PERMISSION"}:
                             s_rec.marked_time = now_time
         updated_count += 1
 
@@ -988,18 +1042,21 @@ def date_range(start_date, end_date):
 
 
 def _report_active_dates(start_date, end_date, session_type, batch_hint=None):
-    """Return an ordered list of dates that have at least one session OR are holidays.
+    """Return an ordered list of dates that have sessions, attendance records, or holidays.
 
     Rules:
-    * A date is included ONLY if an AttendanceSession (ACTIVE, COMPLETED, or SCHEDULED-past)
-      exists for that date, OR if the date is marked as a holiday.
-    * Dates with no session and no holiday are completely excluded.
-    * The list is deduplicated and sorted ascending.
+    * Includes dates with AttendanceSession (ACTIVE, COMPLETED, or past SCHEDULED).
+    * Includes dates with legacy AttendancePermission.
+    * Includes dates with direct Attendance records (manually marked by Admin).
+    * Includes date.today() if within [start_date, end_date] so live attendance is always markable.
+    * Includes dates marked as Holiday.
+    * Deduplicated and sorted ascending.
     """
     today = date.today()
     selected_type = None if session_type == "ALL" else session_type
+    session_dates = set()
 
-    # Collect all session dates in the range
+    # 1. Collect all session dates in the range
     from sqlalchemy import or_ as sq_or, and_ as sq_and
     sessions_q = AttendanceSession.query.filter(
         AttendanceSession.session_date >= start_date,
@@ -1014,9 +1071,10 @@ def _report_active_dates(start_date, end_date, session_type, batch_hint=None):
     )
     if selected_type:
         sessions_q = sessions_q.filter_by(session_type=selected_type)
-    session_dates = {s.session_date for s in sessions_q.all()}
+    for s in sessions_q.all():
+        session_dates.add(s.session_date)
 
-    # Also add legacy AttendancePermission dates
+    # 2. Add legacy AttendancePermission dates
     legacy_q = AttendancePermission.query.filter(
         AttendancePermission.attendance_date >= start_date,
         AttendancePermission.attendance_date <= end_date,
@@ -1030,7 +1088,25 @@ def _report_active_dates(start_date, end_date, session_type, batch_hint=None):
     for p in legacy_q.all():
         session_dates.add(p.attendance_date)
 
-    # Collect holiday dates in range
+    # 3. Add direct Attendance table dates (manually marked by Admin)
+    att_q = Attendance.query.filter(
+        Attendance.attendance_date >= start_date,
+        Attendance.attendance_date <= end_date,
+    )
+    if selected_type == "CLASS":
+        att_q = att_q.filter(
+            or_(Attendance.tracker_type == "CLASS", Attendance.tracker_type.is_(None))
+        )
+    elif selected_type == "MENTORING":
+        att_q = att_q.filter(Attendance.tracker_type == "MENTORING")
+    for a in att_q.all():
+        session_dates.add(a.attendance_date)
+
+    # 4. If today is in range, include today so admin can mark live
+    if start_date <= today <= end_date:
+        session_dates.add(today)
+
+    # 5. Collect holiday dates in range
     holiday_set = holiday_dates_in_range(start_date, end_date, batch=batch_hint, session_type=selected_type)
 
     # Active dates = session dates UNION holiday dates
@@ -1039,9 +1115,9 @@ def _report_active_dates(start_date, end_date, session_type, batch_hint=None):
 
 
 def report_data(start_date, end_date, session_type="CLASS"):
-    """Session-only attendance report — never includes empty calendar days.
+    """Session and attendance matrix report.
 
-    Columns in the returned data are keyed by actual session/holiday dates only.
+    Columns in the returned data are keyed by dates with sessions, attendance, or holidays.
     The exact same attendance formula used here is the single source of truth
     for Student Dashboard, Admin Dashboard, Mentor Dashboard, and Excel export.
     """
@@ -1055,8 +1131,6 @@ def report_data(start_date, end_date, session_type="CLASS"):
     # Preserve existing student order: created_at asc, then id asc — never shuffled.
     students = query.order_by(Student.created_at.asc(), Student.id.asc()).all()
 
-    # Determine which dates to show as columns:
-    # Only session dates and holiday dates — NOT every calendar date.
     active_dates, holiday_set = _report_active_dates(start_date, end_date, session_type)
 
     rows = []
@@ -1066,7 +1140,7 @@ def report_data(start_date, end_date, session_type="CLASS"):
         # Build a lookup: session_date -> list of (status, marked_time)
         records_by_date = OrderedDict((d, []) for d in active_dates)
 
-        # 1. Gather from applicable sessions (includes legacy)
+        # 1. Gather from applicable sessions (includes legacy and direct attendance)
         for session in applicable_sessions(student, selected_type, start_date, end_date):
             if isinstance(session, AttendanceSession):
                 session_date = session.session_date
@@ -1074,15 +1148,23 @@ def report_data(start_date, end_date, session_type="CLASS"):
                 session_date = session.attendance_date
 
             if session_date not in records_by_date:
-                continue  # Date not in active columns — skip
+                continue
 
             status = session_status(student, session)
             if isinstance(session, AttendanceSession):
                 att = SessionAttendance.query.filter_by(
                     session_id=session.id, student_id=student.id
                 ).first()
+                if not att:
+                    att = Attendance.query.filter(
+                        Attendance.student_id == student.id,
+                        Attendance.attendance_date == session.session_date,
+                        or_(Attendance.tracker_type == session.session_type, Attendance.tracker_type.is_(None)),
+                    ).first()
+            elif isinstance(session, Attendance):
+                att = session
             else:
-                tracker_type = session.tracker_type or "CLASS"
+                tracker_type = getattr(session, "tracker_type", None) or "CLASS"
                 att = Attendance.query.filter(
                     Attendance.student_id == student.id,
                     Attendance.attendance_date == session.attendance_date,
@@ -1095,6 +1177,16 @@ def report_data(start_date, end_date, session_type="CLASS"):
         for target_date in active_dates:
             day_recs = records_by_date[target_date]
 
+            if not day_recs:
+                # 2. Check direct Attendance table record if not captured in sessions
+                direct_att = Attendance.query.filter(
+                    Attendance.student_id == student.id,
+                    Attendance.attendance_date == target_date,
+                    ((Attendance.tracker_type == (selected_type or "CLASS")) | Attendance.tracker_type.is_(None)),
+                ).first()
+                if direct_att:
+                    day_recs = [(direct_att.status, direct_att.marked_time.strftime("%H:%M") if direct_att.marked_time else None)]
+
             # Holiday-only date: no session was created, but a holiday covers this date.
             if not day_recs and target_date in holiday_set:
                 daily_records.append({
@@ -1106,8 +1198,6 @@ def report_data(start_date, end_date, session_type="CLASS"):
                 })
                 continue
 
-            # Session date: use the gathered statuses (may be HOLIDAY if the session
-            # itself is on a holiday — session_status handles that).
             status = " / ".join(item[0] for item in day_recs) if day_recs else "NOT MARKED"
             marked_time = " / ".join(item[1] for item in day_recs if item[1]) or None
             daily_records.append({
