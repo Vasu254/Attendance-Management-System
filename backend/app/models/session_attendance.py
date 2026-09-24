@@ -34,7 +34,9 @@ class SessionAttendance(db.Model):
             "session_type": self.session.session_type if self.session else None,
             "status": self.status,
             "marked_time": self.marked_time.strftime("%H:%M") if self.marked_time else None,
+            "marked_by": self.marked_by,
             "distance_meters": round(self.distance_meters, 1) if self.distance_meters is not None else None,
             "correction_reason": self.correction_reason,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

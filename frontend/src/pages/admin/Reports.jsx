@@ -98,6 +98,8 @@ export default function Reports() {
   };
 
   const handleCellChange = async (studentId, studentDbId, date, newStatus) => {
+    // Do not allow editing holiday cells from the sheet view.
+    if (newStatus === "HOLIDAY") return;
     const cellKey = `${studentId}_${date}`;
     setUpdatingCell(cellKey);
     setError("");
@@ -188,6 +190,7 @@ export default function Reports() {
     if (st === "ONLINE") return "Online";
     if (st === "ABSENT") return "Absent";
     if (st === "PERMISSION") return "Permission";
+    if (st === "HOLIDAY") return "HOLIDAY";
     return "Not Marked";
   };
 
@@ -651,45 +654,52 @@ export default function Reports() {
                     return (
                       <th
                         key={dh.date}
-                        className="px-2 py-2 text-center border-r border-amber-600 bg-[#ea8b2c] text-slate-950 font-black whitespace-nowrap text-[11px] group/header relative"
+                        className={`px-2 py-2 text-center border-r border-amber-600 text-slate-950 font-black whitespace-nowrap text-[11px] group/header relative ${
+                          dh.is_holiday ? "bg-indigo-400" : "bg-[#ea8b2c]"
+                        }`}
                       >
                         <div className="flex flex-col items-center justify-center gap-1">
-                          <span>{dh.formatted || dh.date}</span>
-                          <div className="flex items-center gap-1">
-                            {/* Copy Status Only (without names) */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyDateStatusOnly(dh);
-                              }}
-                              title={`Copy ${dh.formatted || dh.date} attendance values ONLY (no names) to paste directly into column`}
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${
-                                isStatusCopied
-                                  ? "bg-white text-emerald-800 shadow-sm"
-                                  : "bg-amber-700/30 text-slate-900 hover:bg-white hover:text-black"
-                              }`}
-                            >
-                              {isStatusCopied ? <FiCheck /> : <FiClipboard />} Status Only
-                            </button>
+                          <span>{dh.formatted || dh.date}{dh.is_holiday ? " 🎉" : ""}</span>
+                          {!dh.is_holiday && (
+                            <div className="flex items-center gap-1">
+                              {/* Copy Status Only (without names) */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyDateStatusOnly(dh);
+                                }}
+                                title={`Copy ${dh.formatted || dh.date} attendance values ONLY (no names) to paste directly into column`}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${
+                                  isStatusCopied
+                                    ? "bg-white text-emerald-800 shadow-sm"
+                                    : "bg-amber-700/30 text-slate-900 hover:bg-white hover:text-black"
+                                }`}
+                              >
+                                {isStatusCopied ? <FiCheck /> : <FiClipboard />} Status Only
+                              </button>
 
-                            {/* Copy Full Name + Status */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyDateWithFullName(dh);
-                              }}
-                              title={`Copy Full Name + Status for ${dh.formatted || dh.date}`}
-                              className={`p-1 rounded transition-all flex items-center justify-center ${
-                                isNameStatusCopied
-                                  ? "bg-white text-emerald-800 shadow-sm"
-                                  : "text-slate-800 hover:text-black hover:bg-amber-600/40 opacity-70 hover:opacity-100"
-                              }`}
-                            >
-                              {isNameStatusCopied ? <FiCheck className="text-xs" /> : <FiCopy className="text-xs" />}
-                            </button>
-                          </div>
+                              {/* Copy Full Name + Status */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyDateWithFullName(dh);
+                                }}
+                                title={`Copy Full Name + Status for ${dh.formatted || dh.date}`}
+                                className={`p-1 rounded transition-all flex items-center justify-center ${
+                                  isNameStatusCopied
+                                    ? "bg-white text-emerald-800 shadow-sm"
+                                    : "text-slate-800 hover:text-black hover:bg-amber-600/40 opacity-70 hover:opacity-100"
+                                }`}
+                              >
+                                {isNameStatusCopied ? <FiCheck className="text-xs" /> : <FiCopy className="text-xs" />}
+                              </button>
+                            </div>
+                          )}
+                          {dh.is_holiday && (
+                            <span className="text-[9px] font-bold text-indigo-100 bg-indigo-600/50 px-1.5 py-0.5 rounded-full">HOLIDAY</span>
+                          )}
                         </div>
                       </th>
                     );
@@ -784,23 +794,36 @@ export default function Reports() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {data.daily_summary?.map((day) => (
-                    <tr key={day.date}>
-                      <td className="font-bold text-ink">{day.formatted_date || day.date}</td>
-                      <td className="text-emerald-700 font-bold">{day.present}</td>
-                      <td className="text-rose-700 font-bold">{day.absent}</td>
-                      <td className="text-purple-700 font-bold">{day.permission || 0}</td>
-                      <td>{day.holiday || 0}</td>
-                      <td>{day.total_sessions}</td>
+                    <tr key={day.date} className={day.is_holiday ? "bg-indigo-50" : ""}>
+                      <td className="font-bold text-ink">
+                        {day.formatted_date || day.date}
+                        {day.is_holiday && (
+                          <span className="ml-2 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 text-[10px] font-black">
+                            🎉 HOLIDAY
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-emerald-700 font-bold">{day.is_holiday ? "—" : day.present}</td>
+                      <td className="text-rose-700 font-bold">{day.is_holiday ? "—" : day.absent}</td>
+                      <td className="text-purple-700 font-bold">{day.is_holiday ? "—" : (day.permission || 0)}</td>
+                      <td>{day.holiday || (day.is_holiday ? 1 : 0)}</td>
+                      <td>{day.is_holiday ? "—" : day.total_sessions}</td>
                       <td>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-black ${
-                            day.percentage < 75 && day.total_sessions
-                              ? "bg-rose-100 text-rose-700 border border-rose-200"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          }`}
-                        >
-                          {day.percentage}%
-                        </span>
+                        {day.is_holiday ? (
+                          <span className="rounded-full px-2.5 py-1 text-xs font-black bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            Holiday
+                          </span>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-black ${
+                              day.percentage < 75 && day.total_sessions
+                                ? "bg-rose-100 text-rose-700 border border-rose-200"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            }`}
+                          >
+                            {day.percentage}%
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -823,10 +846,22 @@ export default function Reports() {
 
 /**
  * Interactive Sheet Dropdown Cell Component
- * Formatted matching Google Sheets pill style with Offline, Online, Absent, Permission options.
+ * Formatted matching Google Sheets pill style.
+ * Holiday cells are displayed as non-interactive indigo badges.
  */
 function SheetDropdownCell({ status, isUpdating, onChange }) {
   const normStatus = (status || "").toUpperCase().trim();
+
+  // Holiday cells are read-only — they should not be editable.
+  if (normStatus === "HOLIDAY") {
+    return (
+      <div className="inline-flex items-center justify-center w-full max-w-[115px]">
+        <span className="rounded-full px-2.5 py-1 text-[11px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200 select-none">
+          🎉 Holiday
+        </span>
+      </div>
+    );
+  }
 
   const getStyle = () => {
     if (normStatus === "OFFLINE" || normStatus === "PRESENT") {

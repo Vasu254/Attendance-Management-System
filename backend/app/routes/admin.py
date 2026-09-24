@@ -2,6 +2,7 @@ import csv
 import json
 from datetime import date, datetime, timezone, timedelta
 from io import StringIO
+from collections import OrderedDict
 
 from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import get_jwt_identity
@@ -11,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import bcrypt, db
 from app.models import ActivityLog, Attendance, AttendancePermission, AttendanceSession, Holiday, PermissionRequest, SessionAttendance, Student, StudentPermission, SystemSetting, User
 from app.utils.attendance import eligible_students_query, latest_permission_for, student_is_eligible
-from app.utils.attendance_calculations import applicable_sessions, session_status, split_summary, student_summary
+from app.utils.attendance_calculations import applicable_sessions, holiday_dates_in_range, session_status, split_summary, student_summary
 from app.utils.auth import get_current_user, role_required
 from app.utils.location import parse_coordinate, validate_geofence
 
@@ -986,59 +987,135 @@ def date_range(start_date, end_date):
     return [start_date + timedelta(days=offset) for offset in range(days + 1)]
 
 
+def _report_active_dates(start_date, end_date, session_type, batch_hint=None):
+    """Return an ordered list of dates that have at least one session OR are holidays.
+
+    Rules:
+    * A date is included ONLY if an AttendanceSession (ACTIVE, COMPLETED, or SCHEDULED-past)
+      exists for that date, OR if the date is marked as a holiday.
+    * Dates with no session and no holiday are completely excluded.
+    * The list is deduplicated and sorted ascending.
+    """
+    today = date.today()
+    selected_type = None if session_type == "ALL" else session_type
+
+    # Collect all session dates in the range
+    from sqlalchemy import or_ as sq_or, and_ as sq_and
+    sessions_q = AttendanceSession.query.filter(
+        AttendanceSession.session_date >= start_date,
+        AttendanceSession.session_date <= end_date,
+        sq_or(
+            AttendanceSession.status.in_(["ACTIVE", "COMPLETED"]),
+            sq_and(
+                AttendanceSession.status == "SCHEDULED",
+                AttendanceSession.session_date <= today,
+            ),
+        ),
+    )
+    if selected_type:
+        sessions_q = sessions_q.filter_by(session_type=selected_type)
+    session_dates = {s.session_date for s in sessions_q.all()}
+
+    # Also add legacy AttendancePermission dates
+    legacy_q = AttendancePermission.query.filter(
+        AttendancePermission.attendance_date >= start_date,
+        AttendancePermission.attendance_date <= end_date,
+    )
+    if selected_type == "CLASS":
+        legacy_q = legacy_q.filter(
+            or_(AttendancePermission.tracker_type == "CLASS", AttendancePermission.tracker_type.is_(None))
+        )
+    elif selected_type == "MENTORING":
+        legacy_q = legacy_q.filter(AttendancePermission.tracker_type == "MENTORING")
+    for p in legacy_q.all():
+        session_dates.add(p.attendance_date)
+
+    # Collect holiday dates in range
+    holiday_set = holiday_dates_in_range(start_date, end_date, batch=batch_hint, session_type=selected_type)
+
+    # Active dates = session dates UNION holiday dates
+    active = sorted(session_dates | holiday_set)
+    return active, holiday_set
+
+
 def report_data(start_date, end_date, session_type="CLASS"):
-    """Sheet-safe report using the same service as every attendance percentage."""
+    """Session-only attendance report — never includes empty calendar days.
+
+    Columns in the returned data are keyed by actual session/holiday dates only.
+    The exact same attendance formula used here is the single source of truth
+    for Student Dashboard, Admin Dashboard, Mentor Dashboard, and Excel export.
+    """
     if end_date < start_date:
         raise ValueError("End date must be after start date")
     if session_type not in {"CLASS", "MENTORING", "ALL"}:
         raise ValueError("Session type must be CLASS, MENTORING, or ALL")
 
     selected_type = None if session_type == "ALL" else session_type
-    dates = date_range(start_date, end_date)
     query = apply_student_filters(Student.query.join(Student.user).filter(User.role == "STUDENT"))
+    # Preserve existing student order: created_at asc, then id asc — never shuffled.
     students = query.order_by(Student.created_at.asc(), Student.id.asc()).all()
-    rows = []
 
+    # Determine which dates to show as columns:
+    # Only session dates and holiday dates — NOT every calendar date.
+    active_dates, holiday_set = _report_active_dates(start_date, end_date, session_type)
+
+    rows = []
     for student in students:
         summary = student_summary(student, selected_type, start_date, end_date)
-        records_by_date = {target_date: [] for target_date in dates}
-        
-        # 1. Gather from applicable sessions
+
+        # Build a lookup: session_date -> list of (status, marked_time)
+        records_by_date = OrderedDict((d, []) for d in active_dates)
+
+        # 1. Gather from applicable sessions (includes legacy)
         for session in applicable_sessions(student, selected_type, start_date, end_date):
-            session_date = session.session_date if isinstance(session, AttendanceSession) else session.attendance_date
+            if isinstance(session, AttendanceSession):
+                session_date = session.session_date
+            else:
+                session_date = session.attendance_date
+
+            if session_date not in records_by_date:
+                continue  # Date not in active columns — skip
+
             status = session_status(student, session)
             if isinstance(session, AttendanceSession):
-                attendance = SessionAttendance.query.filter_by(session_id=session.id, student_id=student.id).first()
+                att = SessionAttendance.query.filter_by(
+                    session_id=session.id, student_id=student.id
+                ).first()
             else:
                 tracker_type = session.tracker_type or "CLASS"
-                attendance = Attendance.query.filter(
+                att = Attendance.query.filter(
                     Attendance.student_id == student.id,
                     Attendance.attendance_date == session.attendance_date,
-                    ((Attendance.tracker_type == tracker_type) | Attendance.tracker_type.is_(None)),
+                    or_(Attendance.tracker_type == tracker_type, Attendance.tracker_type.is_(None)),
                 ).first()
-            marked_time = attendance.marked_time.strftime("%H:%M") if attendance and attendance.marked_time else None
-            records_by_date.setdefault(session_date, []).append((status, marked_time))
+            marked_time = att.marked_time.strftime("%H:%M") if att and att.marked_time else None
+            records_by_date[session_date].append((status, marked_time))
 
         daily_records = []
-        for target_date in dates:
-            day_records = records_by_date[target_date]
-            if not day_records:
-                # 2. Check direct Attendance table record if not captured in sessions
-                direct_att = Attendance.query.filter(
-                    Attendance.student_id == student.id,
-                    Attendance.attendance_date == target_date,
-                    ((Attendance.tracker_type == (selected_type or "CLASS")) | Attendance.tracker_type.is_(None)),
-                ).first()
-                if direct_att:
-                    day_records = [(direct_att.status, direct_att.marked_time.strftime("%H:%M") if direct_att.marked_time else None)]
+        for target_date in active_dates:
+            day_recs = records_by_date[target_date]
 
-            status = " / ".join(item[0] for item in day_records) if day_records else "NOT MARKED"
-            marked_time = " / ".join(item[1] for item in day_records if item[1]) or None
+            # Holiday-only date: no session was created, but a holiday covers this date.
+            if not day_recs and target_date in holiday_set:
+                daily_records.append({
+                    "date": target_date.isoformat(),
+                    "formatted_date": format_sheet_date(target_date),
+                    "status": "HOLIDAY",
+                    "marked_time": None,
+                    "is_holiday": True,
+                })
+                continue
+
+            # Session date: use the gathered statuses (may be HOLIDAY if the session
+            # itself is on a holiday — session_status handles that).
+            status = " / ".join(item[0] for item in day_recs) if day_recs else "NOT MARKED"
+            marked_time = " / ".join(item[1] for item in day_recs if item[1]) or None
             daily_records.append({
                 "date": target_date.isoformat(),
                 "formatted_date": format_sheet_date(target_date),
                 "status": status,
                 "marked_time": marked_time,
+                "is_holiday": target_date in holiday_set,
             })
 
         rows.append({
@@ -1057,14 +1134,23 @@ def report_data(start_date, end_date, session_type="CLASS"):
             "daily_records": daily_records,
         })
 
+    # Build daily summary using only active_dates
     daily_summary = []
-    for target_date in dates:
-        records = [record for row in rows for record in row["daily_records"] if record["date"] == target_date.isoformat()]
-        split_statuses = [status for record in records for status in record["status"].split(" / ")]
+    for target_date in active_dates:
+        is_hol = target_date in holiday_set
+        records = [
+            rec
+            for row in rows
+            for rec in row["daily_records"]
+            if rec["date"] == target_date.isoformat()
+        ]
+        split_statuses = [
+            s for rec in records for s in rec["status"].split(" / ")
+        ]
         present = sum(1 for s in split_statuses if s in {"PRESENT", "OFFLINE", "ONLINE"})
         absent = split_statuses.count("ABSENT")
         permission = split_statuses.count("PERMISSION")
-        holiday = split_statuses.count("HOLIDAY")
+        holiday = split_statuses.count("HOLIDAY") + (len(rows) if is_hol and not records else 0)
         total = present + absent
         daily_summary.append({
             "date": target_date.isoformat(),
@@ -1074,18 +1160,23 @@ def report_data(start_date, end_date, session_type="CLASS"):
             "permission": permission,
             "holiday": holiday,
             "total_sessions": total,
+            "is_holiday": is_hol,
             "percentage": round((present / total) * 100, 2) if total else 0,
         })
 
     total_present = sum(row["present_days"] for row in rows)
     total_absent = sum(row["absent_days"] for row in rows)
     total_sessions = sum(row["total_sessions"] for row in rows)
-    
-    formatted_dates = [{"date": d.isoformat(), "formatted": format_sheet_date(d), "day_name": d.strftime("%a")} for d in dates]
+
+    formatted_dates = [
+        {"date": d.isoformat(), "formatted": format_sheet_date(d), "day_name": d.strftime("%a"), "is_holiday": d in holiday_set}
+        for d in active_dates
+    ]
 
     return {
         "session_type": session_type,
-        "dates": [target_date.isoformat() for target_date in dates],
+        # Only the dates that have sessions or holidays — no empty calendar days.
+        "dates": [d.isoformat() for d in active_dates],
         "date_headers": formatted_dates,
         "daily_summary": daily_summary,
         "rows": rows,
@@ -1114,6 +1205,16 @@ def reports():
 @admin_bp.get("/reports/export")
 @role_required("ADMIN")
 def export_reports():
+    """Export attendance as CSV.
+
+    Rules:
+    * Only session dates and holiday dates appear as columns.
+    * Holiday dates show 'HOLIDAY' — not ABSENT or NOT MARKED.
+    * Non-session, non-holiday dates are not included.
+    * Student names, enrollment IDs, and row order are preserved exactly.
+    * No duplicate attendance columns for the same date.
+    * Percentage uses the same formula as all dashboards.
+    """
     start_date = parse_date(request.args.get("start_date"), date.today())
     end_date = parse_date(request.args.get("end_date"), date.today())
     include_id = request.args.get("include_id", "false").lower() == "true"
@@ -1127,6 +1228,8 @@ def export_reports():
 
     output = StringIO()
     date_header_map = {item["date"]: item["formatted"] for item in data["date_headers"]}
+    # Track which dates are holidays so we can label them HOLIDAY in the export.
+    holiday_date_set = {item["date"] for item in data["date_headers"] if item.get("is_holiday")}
 
     if status_only and single_date:
         # Export only status column without names
@@ -1136,18 +1239,26 @@ def export_reports():
         writer.writeheader()
         for row in data["rows"]:
             rec = next((r for r in row["daily_records"] if r["date"] == single_date), None)
-            writer.writerow({target_label: rec["status"] if rec else "NOT_MARKED"})
+            if rec:
+                cell = rec["status"]
+            elif single_date in holiday_date_set:
+                cell = "HOLIDAY"
+            else:
+                cell = "NOT_MARKED"
+            writer.writerow({target_label: cell})
         filename = f"Attendance_{single_date}_Status_Only.csv"
     else:
         fieldnames = ["Full Name"]
         if include_id:
             fieldnames.append("Enrollment ID")
         fieldnames.extend(["Batch", "Present Days", "Absent Days", "Attendance %"])
+        # Add one column per active date (sessions + holidays only)
         for d in data["dates"]:
             fieldnames.append(date_header_map.get(d, d))
 
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
+        # Student rows are already in the preserved order (created_at asc, id asc).
         for row in data["rows"]:
             csv_row = {
                 "Full Name": row["full_name"],
@@ -1158,9 +1269,18 @@ def export_reports():
             }
             if include_id:
                 csv_row["Enrollment ID"] = row["student_id"]
-            for record in row["daily_records"]:
-                col_name = date_header_map.get(record["date"], record["date"])
-                csv_row[col_name] = record["status"]
+            # Build a lookup for this student's daily records
+            daily_by_date = {rec["date"]: rec["status"] for rec in row["daily_records"]}
+            for d in data["dates"]:
+                col_name = date_header_map.get(d, d)
+                if d in daily_by_date:
+                    cell = daily_by_date[d]
+                elif d in holiday_date_set:
+                    # Holiday date with no session record for this student
+                    cell = "HOLIDAY"
+                else:
+                    cell = "NOT MARKED"
+                csv_row[col_name] = cell
             writer.writerow(csv_row)
         filename = f"{data['session_type'].title()}_Attendance_Report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"
 

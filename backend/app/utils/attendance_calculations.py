@@ -1,9 +1,30 @@
-"""The single source of truth for attendance percentages and status summaries."""
+"""The single source of truth for attendance percentages and status summaries.
+
+Rules enforced here:
+  * Attendance is ONLY generated from actual sessions (AttendanceSession rows
+    that are ACTIVE, COMPLETED, or SCHEDULED-past) and legacy AttendancePermission rows.
+  * Holidays do NOT count as working days and do NOT reduce the percentage.
+  * Dates with no session are invisible to the percentage formula.
+  * session_id + student_id is the unique key — no duplicates possible.
+  * The exact same formula is used everywhere: Student, Admin, Mentor, Reports, Excel.
+
+  Attendance % = credited / total_valid_sessions * 100
+  where total_valid_sessions = all non-holiday, non-future session rows.
+"""
 from datetime import date
 
 from sqlalchemy import and_, or_
 
-from app.models import Attendance, AttendancePermission, AttendanceSession, Holiday, PermissionRequest, SessionAttendance, StudentPermission, SystemSetting
+from app.models import (
+    Attendance,
+    AttendancePermission,
+    AttendanceSession,
+    Holiday,
+    PermissionRequest,
+    SessionAttendance,
+    StudentPermission,
+    SystemSetting,
+)
 from app.utils.attendance import batches_match, student_is_eligible
 
 
@@ -18,13 +39,17 @@ def db_setting(key, default):
 
 
 def is_holiday(student, session_date, session_type):
+    """Return True if the given date is a holiday applicable to this student/session_type."""
     holidays = Holiday.query.filter(
         ((Holiday.start_date <= session_date) & (Holiday.end_date >= session_date))
         | (Holiday.holiday_date == session_date)
     ).all()
     return any(
         (not holiday.batch or batches_match(holiday.batch, student.batch))
-        and (not (holiday.session_type or holiday.tracker_type) or (holiday.session_type or holiday.tracker_type) == session_type)
+        and (
+            not (holiday.session_type or holiday.tracker_type)
+            or (holiday.session_type or holiday.tracker_type) == session_type
+        )
         for holiday in holidays
     )
 
@@ -56,15 +81,47 @@ def approved_permission(student, session):
 
 
 def applicable_sessions(student, session_type=None, start_date=None, end_date=None):
-    """Includes new sessions plus existing legacy attendance windows without changing them."""
-    sessions = AttendanceSession.query.filter(AttendanceSession.status.in_(["ACTIVE", "COMPLETED"]))
+    """Return all sessions that should count toward this student's attendance.
+
+    Includes:
+      * AttendanceSession rows with status ACTIVE, COMPLETED, or SCHEDULED
+        (SCHEDULED sessions on a past date represent real planned classes that
+        have not been activated yet — they still count as working days).
+      * Legacy AttendancePermission rows (CLASS-type only for CLASS queries,
+        MENTORING-type only for MENTORING queries).
+
+    Does NOT include:
+      * CANCELLED sessions.
+      * Sessions on future dates with status SCHEDULED (not yet started).
+      * Sessions the student is not eligible for (wrong batch/section).
+    """
+    today = date.today()
+
+    # Include ACTIVE, COMPLETED, and SCHEDULED-past sessions.
+    # SCHEDULED-future sessions have no attendance impact yet.
+    sessions_q = AttendanceSession.query.filter(
+        or_(
+            AttendanceSession.status.in_(["ACTIVE", "COMPLETED"]),
+            and_(
+                AttendanceSession.status == "SCHEDULED",
+                AttendanceSession.session_date <= today,
+            ),
+        )
+    )
     if session_type:
-        sessions = sessions.filter_by(session_type=session_type)
+        sessions_q = sessions_q.filter_by(session_type=session_type)
     if start_date:
-        sessions = sessions.filter(AttendanceSession.session_date >= start_date)
+        sessions_q = sessions_q.filter(AttendanceSession.session_date >= start_date)
     if end_date:
-        sessions = sessions.filter(AttendanceSession.session_date <= end_date)
-    result = [session for session in sessions.order_by(AttendanceSession.session_date.asc(), AttendanceSession.id.asc()).all() if student_is_eligible(student, session)]
+        sessions_q = sessions_q.filter(AttendanceSession.session_date <= end_date)
+
+    result = [
+        s
+        for s in sessions_q.order_by(
+            AttendanceSession.session_date.asc(), AttendanceSession.id.asc()
+        ).all()
+        if student_is_eligible(student, s)
+    ]
 
     # Old AttendancePermission rows were the original class sessions. Leave their
     # records in the legacy table and count them as CLASS only.
@@ -72,22 +129,40 @@ def applicable_sessions(student, session_type=None, start_date=None, end_date=No
         legacy = AttendancePermission.query.all()
         for permission in legacy:
             permission_type = permission.tracker_type or "CLASS"
-            if (not start_date or permission.attendance_date >= start_date) and (not end_date or permission.attendance_date <= end_date) and permission_type == "CLASS" and student_is_eligible(student, permission):
+            if (
+                (not start_date or permission.attendance_date >= start_date)
+                and (not end_date or permission.attendance_date <= end_date)
+                and permission_type == "CLASS"
+                and student_is_eligible(student, permission)
+            ):
                 result.append(permission)
+
     if not session_type or session_type == "MENTORING":
         legacy = AttendancePermission.query.all()
         for permission in legacy:
             permission_type = permission.tracker_type or "CLASS"
-            if (not start_date or permission.attendance_date >= start_date) and (not end_date or permission.attendance_date <= end_date) and permission_type == "MENTORING" and student_is_eligible(student, permission):
+            if (
+                (not start_date or permission.attendance_date >= start_date)
+                and (not end_date or permission.attendance_date <= end_date)
+                and permission_type == "MENTORING"
+                and student_is_eligible(student, permission)
+            ):
                 result.append(permission)
+
     return result
 
 
 def session_status(student, session):
+    """Return the attendance status string for one student+session combination.
+
+    Returns one of: PRESENT, ABSENT, PERMISSION, HOLIDAY, NOT_MARKED, OFFLINE, ONLINE.
+    """
     session_type = getattr(session, "session_type", "CLASS")
     session_date = session.session_date if isinstance(session, AttendanceSession) else session.attendance_date
+
     if is_holiday(student, session_date, session_type):
         return "HOLIDAY"
+
     if isinstance(session, AttendanceSession):
         record = SessionAttendance.query.filter_by(session_id=session.id, student_id=student.id).first()
         if record:
@@ -113,12 +188,31 @@ def session_status(student, session):
         ).first()
         if legacy_permission:
             return "PERMISSION"
+
+    # If the session date has passed (or is today) and no record exists → ABSENT.
     return "ABSENT" if session_date <= date.today() else "NOT_MARKED"
 
 
 def student_summary(student, session_type=None, start_date=None, end_date=None):
+    """Compute attendance totals for one student using the canonical formula.
+
+    Attendance % = credited / total_valid_sessions * 100
+
+    Where:
+      total_valid_sessions = sessions that are not holidays and not future-unmarked.
+      credited             = PRESENT + OFFLINE + ONLINE + (PERMISSION if policy=EXCUSED).
+      Holidays and NOT_MARKED (future) sessions are excluded from the denominator.
+    """
     policy = permission_policy()
-    totals = {"present": 0, "absent": 0, "permission": 0, "holiday": 0, "not_marked": 0, "total_sessions": 0, "credited": 0}
+    totals = {
+        "present": 0,
+        "absent": 0,
+        "permission": 0,
+        "holiday": 0,
+        "not_marked": 0,
+        "total_sessions": 0,
+        "credited": 0,
+    }
     for session in applicable_sessions(student, session_type, start_date, end_date):
         status = session_status(student, session)
         if status == "HOLIDAY":
@@ -139,12 +233,18 @@ def student_summary(student, session_type=None, start_date=None, end_date=None):
             totals["credited"] += 1
         else:
             totals["absent"] += 1
-    totals["attendance_percentage"] = round((totals["credited"] / totals["total_sessions"]) * 100, 2) if totals["total_sessions"] else 0
+
+    totals["attendance_percentage"] = (
+        round((totals["credited"] / totals["total_sessions"]) * 100, 2)
+        if totals["total_sessions"]
+        else 0
+    )
     totals["below_75"] = bool(totals["total_sessions"] and totals["attendance_percentage"] < 75)
     return totals
 
 
 def split_summary(student, start_date=None, end_date=None):
+    """Return combined CLASS + MENTORING summary for a student."""
     class_summary = student_summary(student, "CLASS", start_date, end_date)
     mentoring_summary = student_summary(student, "MENTORING", start_date, end_date)
     total = class_summary["total_sessions"] + mentoring_summary["total_sessions"]
@@ -155,3 +255,38 @@ def split_summary(student, start_date=None, end_date=None):
         "overall_percentage": round((credited / total) * 100, 2) if total else 0,
         "overall_sessions": total,
     }
+
+
+def holiday_dates_in_range(start_date, end_date, batch=None, session_type=None):
+    """Return a set of date objects that are holidays within the given range.
+
+    Optionally filtered by batch and session_type.
+    """
+    holidays = Holiday.query.filter(
+        or_(
+            and_(Holiday.start_date <= end_date, Holiday.end_date >= start_date),
+            and_(Holiday.holiday_date >= start_date, Holiday.holiday_date <= end_date),
+        )
+    ).all()
+
+    result = set()
+    for h in holidays:
+        # Batch check
+        if batch and h.batch and not batches_match(h.batch, batch):
+            continue
+        # Session-type check
+        h_type = h.session_type or h.tracker_type
+        if session_type and h_type and h_type != session_type:
+            continue
+
+        h_start = h.start_date or h.holiday_date
+        h_end = h.end_date or h.holiday_date
+        if not h_start:
+            continue
+        current = max(h_start, start_date)
+        stop = min(h_end, end_date)
+        while current <= stop:
+            result.add(current)
+            from datetime import timedelta
+            current += timedelta(days=1)
+    return result
