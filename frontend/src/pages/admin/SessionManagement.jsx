@@ -3,7 +3,7 @@ import {
   FiLock, FiPlus, FiUnlock, FiTrash2, FiEye, FiX,
   FiCopy, FiCheck, FiRefreshCw, FiAlertTriangle, FiUsers,
   FiCalendar, FiClock, FiActivity, FiCheckSquare, FiSquare,
-  FiMapPin
+  FiMapPin, FiEdit
 } from "react-icons/fi";
 import api from "../../api/axios";
 import GoogleMapGeofence from "../../components/GoogleMapGeofence";
@@ -88,6 +88,11 @@ export default function SessionManagement() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData]       = useState(null);
 
+  // Edit session state
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm, setEditForm]     = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // Delete confirmation state
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]         = useState(false);
@@ -138,6 +143,60 @@ export default function SessionManagement() {
       setForm(blank);
       if (tab === "inactive") loadSessions("inactive");
     } catch (err) { setError(err.response?.data?.message || "Unable to create session."); }
+  };
+
+  // ── Edit Session Handler ─────────────────────────────────────────────────────
+  const openEdit = (session) => {
+    setEditTarget(session);
+    setEditForm({
+      session_date: session.session_date,
+      start_time: session.start_time,
+      end_time: session.end_time,
+      session_type: session.session_type,
+      batch: session.batch || "",
+      section: session.section || "",
+      subject: session.subject || "",
+      room: session.room || "",
+      mentor_id: session.mentor_id || "",
+      enable_location: Boolean(session.latitude && session.longitude),
+      location_name: session.location_name || "",
+      latitude: session.latitude != null ? String(session.latitude) : "",
+      longitude: session.longitude != null ? String(session.longitude) : "",
+      radius_meters: session.radius_meters != null ? String(session.radius_meters) : "300",
+    });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editTarget || !editForm) return;
+    setSavingEdit(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.put(`/admin/sessions/${editTarget.id}`, {
+        session_date: editForm.session_date,
+        start_time: editForm.start_time,
+        end_time: editForm.end_time,
+        session_type: editForm.session_type,
+        batch: editForm.batch || null,
+        section: editForm.section || null,
+        subject: editForm.subject || null,
+        room: editForm.room || null,
+        mentor_id: editForm.mentor_id ? Number(editForm.mentor_id) : null,
+        location_name: editForm.enable_location ? (editForm.location_name || "Campus Location") : null,
+        latitude: editForm.enable_location ? (editForm.latitude || null) : null,
+        longitude: editForm.enable_location ? (editForm.longitude || null) : null,
+        radius_meters: editForm.enable_location ? (editForm.radius_meters || "300") : null,
+      });
+      setMessage(`Session "${editForm.subject || "Untitled"}" timings and details updated successfully!`);
+      setEditTarget(null);
+      setEditForm(null);
+      loadSessions(tab);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update session timings.");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   // ── Activate / Close ──────────────────────────────────────────────────────────
@@ -199,7 +258,7 @@ export default function SessionManagement() {
       <div className="surface p-5">
         <p className="text-sm font-bold uppercase tracking-wider text-brand">Session Management</p>
         <h1 className="mt-1 text-2xl font-black text-ink">Class &amp; Mentoring Sessions</h1>
-        <p className="mt-1 text-sm text-slate-500">Create sessions with Google Maps location permissions up to 300m radius, manage windows, and track attendance.</p>
+        <p className="mt-1 text-sm text-slate-500">Create sessions with Google Maps location permissions up to 300m radius, edit session timings, manage windows, and track attendance.</p>
       </div>
 
       {/* ── Toasts ── */}
@@ -386,6 +445,7 @@ export default function SessionManagement() {
                   session={session}
                   tab={tab}
                   onView={() => openDetail(session)}
+                  onEdit={() => openEdit(session)}
                   onActivate={() => sessionAction(session, "activate")}
                   onClose={() => sessionAction(session, "close")}
                   onDelete={() => setDeleteTarget(session)}
@@ -394,6 +454,119 @@ export default function SessionManagement() {
             </div>
           )}
         </section>
+      )}
+
+      {/* ════════════════════ EDIT SESSION MODAL ════════════════════ */}
+      {editTarget && editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setEditTarget(null); setEditForm(null); }} />
+          <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                  <FiEdit size={18} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-ink">Edit Session Timings &amp; Details</h3>
+                  <p className="text-xs text-slate-500">Update date, start/end time, subject, batch, and location permissions</p>
+                </div>
+              </div>
+              <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" onClick={() => { setEditTarget(null); setEditForm(null); }}>
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSaveEdit}>
+              <Field label="Session Date" type="date" value={editForm.session_date} onChange={(v) => setEditForm({ ...editForm, session_date: v })} />
+              <label>
+                <span className="label">Session type</span>
+                <select className="field" value={editForm.session_type} onChange={(e) => setEditForm({ ...editForm, session_type: e.target.value })}>
+                  <option value="CLASS">CLASS</option>
+                  <option value="MENTORING">MENTORING</option>
+                  <option value="OTHER">OTHER</option>
+                </select>
+              </label>
+
+              <Field label="Start Time (Edit Timings)" type="time" value={editForm.start_time} onChange={(v) => setEditForm({ ...editForm, start_time: v })} />
+              <Field label="End Time (Edit Timings)"   type="time" value={editForm.end_time}   onChange={(v) => setEditForm({ ...editForm, end_time: v })} />
+
+              <div>
+                <Field label="Batch" placeholder="All batches (e.g. 64)" list="edit-session-batch-list" value={editForm.batch} onChange={(v) => setEditForm({ ...editForm, batch: v })} required={false} />
+                <datalist id="edit-session-batch-list">
+                  {batches.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </div>
+
+              <Field label="Section"  placeholder="All sections"  value={editForm.section}  onChange={(v) => setEditForm({ ...editForm, section: v })}  required={false} />
+              <Field label="Subject / topic"     placeholder="Optional" value={editForm.subject} onChange={(v) => setEditForm({ ...editForm, subject: v })} required={false} />
+              <Field label="Room / online link"  placeholder="Optional" value={editForm.room}    onChange={(v) => setEditForm({ ...editForm, room: v })}    required={false} />
+
+              <label className="sm:col-span-2">
+                <span className="label">Assigned mentor</span>
+                <select className="field" value={editForm.mentor_id} onChange={(e) => setEditForm({ ...editForm, mentor_id: e.target.value })}>
+                  <option value="">My account / unassigned</option>
+                  {mentors.filter((m) => m.is_active).map((m) => <option key={m.id} value={m.id}>{m.username}</option>)}
+                </select>
+              </label>
+
+              {/* ── Location Geofence in Edit ── */}
+              <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FiMapPin className="text-red-500" size={16} />
+                    <span className="text-xs font-black text-ink">Google Maps Geofence Permission (300m Radius)</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={editForm.enable_location}
+                      onChange={(e) => setEditForm({ ...editForm, enable_location: e.target.checked })}
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-teal-600"></div>
+                  </label>
+                </div>
+
+                {editForm.enable_location && (
+                  <div className="space-y-3 pt-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Location Name" placeholder="Auditorium, Block B" value={editForm.location_name} onChange={(v) => setEditForm({ ...editForm, location_name: v })} required={false} />
+                      <div>
+                        <label className="label">Allowed Radius (Meters)</label>
+                        <input type="number" className="field" value={editForm.radius_meters} onChange={(e) => setEditForm({ ...editForm, radius_meters: e.target.value })} placeholder="300" />
+                      </div>
+                    </div>
+                    <GoogleMapGeofence
+                      mode="picker"
+                      latitude={editForm.latitude}
+                      longitude={editForm.longitude}
+                      radiusMeters={editForm.radius_meters}
+                      locationName={editForm.location_name}
+                      onChange={(loc) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          latitude: loc.latitude,
+                          longitude: loc.longitude,
+                          radius_meters: loc.radius_meters,
+                          location_name: loc.location_name,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="sm:col-span-2 flex justify-end gap-3 pt-3">
+                <button type="button" className="btn-secondary" onClick={() => { setEditTarget(null); setEditForm(null); }}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={savingEdit}>
+                  {savingEdit ? "Saving Changes..." : "Save Timings & Details"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ════════════════════ DETAIL MODAL ════════════════════ */}
@@ -559,7 +732,7 @@ export default function SessionManagement() {
 }
 
 // ─── Session Row ───────────────────────────────────────────────────────────────
-function SessionRow({ session, tab, onView, onActivate, onClose, onDelete }) {
+function SessionRow({ session, tab, onView, onEdit, onActivate, onClose, onDelete }) {
   const pct = session.total_eligible
     ? Math.round((session.present_count / session.total_eligible) * 100)
     : 0;
@@ -576,7 +749,7 @@ function SessionRow({ session, tab, onView, onActivate, onClose, onDelete }) {
         <p className="font-black text-ink truncate">{session.subject || "Untitled Session"}</p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-500">
           <span className="flex items-center gap-1"><FiCalendar size={11} /> {session.session_date}</span>
-          <span className="flex items-center gap-1"><FiClock size={11} /> {session.start_time}–{session.end_time}</span>
+          <span className="flex items-center gap-1 font-mono font-bold text-slate-700"><FiClock size={11} /> {session.start_time}–{session.end_time}</span>
           {session.batch && <span>Batch: {session.batch}{session.section ? ` / ${session.section}` : ""}</span>}
           {session.room && <span>{session.room}</span>}
           {session.location_required && (
@@ -618,6 +791,15 @@ function SessionRow({ session, tab, onView, onActivate, onClose, onDelete }) {
         >
           <FiEye size={13} /> View
         </button>
+
+        <button
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-700 bg-amber-50 ring-1 ring-amber-200 hover:bg-amber-100 transition"
+          onClick={onEdit}
+          title="Edit session timings & details"
+        >
+          <FiEdit size={13} /> Edit
+        </button>
+
         {session.status !== "ACTIVE" && session.status !== "COMPLETED" && session.status !== "CANCELLED" && (
           <button
             className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-black text-white hover:bg-teal-700 transition"

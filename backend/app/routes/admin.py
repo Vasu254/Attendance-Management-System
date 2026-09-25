@@ -87,10 +87,73 @@ def list_sessions():
         d["present_count"] = SessionAttendance.query.filter(
             SessionAttendance.session_id == session.id,
             SessionAttendance.student_id.in_(eligible_ids) if eligible_ids else False,
-            SessionAttendance.status == "PRESENT",
+            SessionAttendance.status.in_(["PRESENT", "OFFLINE", "ONLINE"]),
         ).count() if eligible_ids else 0
         result.append(d)
     return jsonify(result)
+
+
+@admin_bp.put("/sessions/<int:session_id>")
+@role_required(("ADMIN", "MENTOR"))
+def update_session(session_id):
+    session = AttendanceSession.query.get_or_404(session_id)
+    if not can_manage_session(session):
+        return jsonify({"message": "You can only manage sessions assigned to you."}), 403
+
+    data = request.get_json() or {}
+    previous = session.to_dict()
+
+    try:
+        if "session_date" in data or "attendance_date" in data:
+            session.session_date = parse_date(data.get("session_date") or data.get("attendance_date"))
+        if "start_time" in data and data["start_time"]:
+            session.start_time = parse_time(data["start_time"])
+        if "end_time" in data and data["end_time"]:
+            session.end_time = parse_time(data["end_time"])
+        if "session_type" in data and data["session_type"]:
+            session.session_type = allowed_session_types(data["session_type"])
+        if "batch" in data:
+            session.batch = data.get("batch") or None
+        if "section" in data:
+            session.section = data.get("section") or None
+        if "subject" in data:
+            session.subject = data.get("subject") or None
+        if "room" in data:
+            session.room = data.get("room") or None
+        if "mentor_id" in data:
+            session.mentor_id = data.get("mentor_id") or current_actor_id()
+
+        if "latitude" in data or "longitude" in data or "radius_meters" in data or "location_name" in data:
+            lat = parse_coordinate(data.get("latitude")) if "latitude" in data else session.latitude
+            lng = parse_coordinate(data.get("longitude")) if "longitude" in data else session.longitude
+            rad = parse_coordinate(data.get("radius_meters")) if "radius_meters" in data else session.radius_meters
+            loc_name = data.get("location_name") if "location_name" in data else session.location_name
+
+            if (lat is not None or lng is not None) and rad is None:
+                rad = 300.0
+
+            geofence_err = validate_geofence(lat, lng, rad)
+            if geofence_err:
+                return jsonify({"message": geofence_err}), 400
+
+            session.latitude = lat
+            session.longitude = lng
+            session.radius_meters = rad
+            session.location_name = loc_name or None
+
+    except (TypeError, ValueError):
+        return jsonify({"message": "Invalid date, time, or location format."}), 400
+
+    if session.end_time <= session.start_time:
+        return jsonify({"message": "End time must be after start time"}), 400
+
+    log_activity(
+        current_actor_id(), "UPDATED", "attendance_session", session.id,
+        previous=previous, new=session.to_dict(), reason="Session timings and parameters updated"
+    )
+    db.session.commit()
+    return jsonify(session.to_dict())
+
 
 
 @admin_bp.post("/sessions")
