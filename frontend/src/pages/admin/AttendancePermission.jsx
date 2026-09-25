@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { FiCrosshair, FiLock, FiMapPin, FiTarget, FiUnlock } from "react-icons/fi";
+import { FiLock, FiUnlock } from "react-icons/fi";
 import api from "../../api/axios";
+import GoogleMapGeofence from "../../components/GoogleMapGeofence";
 
 const today = new Date().toISOString().slice(0, 10);
 const nowHour = new Date().getHours();
@@ -21,11 +22,10 @@ export default function AttendancePermission() {
     location_name: "",
     latitude: "",
     longitude: "",
-    radius_meters: "",
+    radius_meters: "300",
   });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [locating, setLocating] = useState(false);
 
   const load = (date = form.attendance_date) =>
     api.get("/admin/attendance-permissions/today", { params: { date } }).then((res) => setPermission(res.data));
@@ -49,10 +49,10 @@ export default function AttendancePermission() {
         location_name: form.location_name || null,
         latitude: form.latitude || null,
         longitude: form.longitude || null,
-        radius_meters: form.radius_meters || null,
+        radius_meters: form.radius_meters || "300",
       });
       setPermission(res.data);
-      setMessage("Attendance permission saved");
+      setMessage("Attendance permission saved with Google Maps 300m radius geofence");
     } catch (err) {
       setError(err.response?.data?.message || "Unable to save permission");
     }
@@ -65,41 +65,16 @@ export default function AttendancePermission() {
     setPermission(res.data);
   };
 
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Location is not supported by this browser");
-      return;
-    }
-    setLocating(true);
-    setError("");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setForm((current) => ({
-          ...current,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-          radius_meters: current.radius_meters || "150",
-        }));
-        setLocating(false);
-      },
-      () => {
-        setError("Unable to read current location. Please allow location access or enter coordinates manually.");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-    );
-  };
-
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      <section className="surface p-5">
+      <section className="surface p-5 space-y-5">
         <h2 className="text-lg font-black text-ink">Attendance Permission</h2>
         {(message || error) && (
-          <div className={`mt-4 rounded-md px-3 py-2 text-sm font-medium ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>
+          <div className={`rounded-md px-3 py-2 text-sm font-medium ${error ? "bg-red-50 text-red-700" : "bg-teal-50 text-teal-700"}`}>
             {error || message}
           </div>
         )}
-        <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={create}>
+        <form className="grid gap-4 sm:grid-cols-2" onSubmit={create}>
           <div>
             <label className="label">Attendance Date</label>
             <input
@@ -148,79 +123,74 @@ export default function AttendancePermission() {
             <label className="label">Section</label>
             <input className="field" placeholder="All sections" value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value })} />
           </div>
-          <div className="sm:col-span-2">
-            <div className="rounded-lg border border-slate-200/80 bg-slate-50/90 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-ink">Allowed Campus Location</h3>
-                  <p className="mt-1 text-xs text-slate-500">Students can mark attendance only inside this radius when coordinates are set.</p>
-                </div>
-                <button className="btn-secondary shrink-0" type="button" onClick={useCurrentLocation} disabled={locating}>
-                  <FiCrosshair /> {locating ? "Detecting..." : "Use My Location"}
-                </button>
+
+          <div className="sm:col-span-2 space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-ink">Google Maps Allowed Location (300m Radius)</h3>
+                <p className="text-xs text-slate-500">Pick classroom/campus location on Google Maps with up to 300 meters restriction radius.</p>
               </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="sm:col-span-2">
-                    <label className="label">Location Name</label>
-                    <input
-                      className="field"
-                      placeholder="Main campus gate, Block A, Library..."
-                      value={form.location_name}
-                      onChange={(e) => setForm({ ...form, location_name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Latitude</label>
-                    <input
-                      className="field"
-                      inputMode="decimal"
-                      placeholder="Example: 28.613939"
-                      value={form.latitude}
-                      onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Longitude</label>
-                    <input
-                      className="field"
-                      inputMode="decimal"
-                      placeholder="Example: 77.209023"
-                      value={form.longitude}
-                      onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Radius In Meters</label>
-                    <input
-                      className="field"
-                      inputMode="numeric"
-                      placeholder="150"
-                      value={form.radius_meters}
-                      onChange={(e) => setForm({ ...form, radius_meters: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      className="btn-secondary w-full"
-                      type="button"
-                      onClick={() => setForm({ ...form, location_name: "", latitude: "", longitude: "", radius_meters: "" })}
-                    >
-                      Clear Location
-                    </button>
-                  </div>
-                </div>
-                <LocationPreview
-                  latitude={form.latitude}
-                  longitude={form.longitude}
-                  radius={form.radius_meters}
-                  locationName={form.location_name}
+              <button
+                className="btn-secondary text-xs"
+                type="button"
+                onClick={() => setForm({ ...form, location_name: "", latitude: "", longitude: "", radius_meters: "300" })}
+              >
+                Clear Location
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label">Location Name</label>
+                <input
+                  className="field"
+                  placeholder="Main campus gate, Block A, Library..."
+                  value={form.location_name}
+                  onChange={(e) => setForm({ ...form, location_name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Latitude</label>
+                <input
+                  className="field"
+                  inputMode="decimal"
+                  placeholder="Example: 28.613939"
+                  value={form.latitude}
+                  onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Longitude</label>
+                <input
+                  className="field"
+                  inputMode="decimal"
+                  placeholder="Example: 77.209023"
+                  value={form.longitude}
+                  onChange={(e) => setForm({ ...form, longitude: e.target.value })}
                 />
               </div>
             </div>
+
+            <GoogleMapGeofence
+              mode="picker"
+              latitude={form.latitude}
+              longitude={form.longitude}
+              radiusMeters={form.radius_meters}
+              locationName={form.location_name}
+              onChange={(loc) =>
+                setForm((prev) => ({
+                  ...prev,
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                  radius_meters: loc.radius_meters,
+                  location_name: loc.location_name,
+                }))
+              }
+            />
           </div>
+
           <div className="sm:col-span-2">
-            <button className="btn-primary">Save Attendance Permission</button>
+            <button className="btn-primary w-full">Save Attendance Permission</button>
           </div>
         </form>
       </section>
@@ -248,34 +218,6 @@ export default function AttendancePermission() {
           <p className="mt-4 text-sm text-slate-500">No permission exists for this date yet.</p>
         )}
       </section>
-    </div>
-  );
-}
-
-function LocationPreview({ latitude, longitude, radius, locationName }) {
-  const hasLocation = latitude && longitude;
-  return (
-    <div className="min-h-64 overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <div className="relative h-44 bg-[linear-gradient(90deg,#dbeafe_1px,transparent_1px),linear-gradient(0deg,#dbeafe_1px,transparent_1px)] bg-[size:28px_28px]">
-        <div className="absolute inset-0 bg-teal-50/40" />
-        <div className="absolute left-[18%] top-8 h-7 w-28 rotate-[-18deg] rounded-full bg-white/80" />
-        <div className="absolute bottom-8 right-[12%] h-8 w-36 rotate-[22deg] rounded-full bg-white/80" />
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-          <div className="flex h-28 w-28 items-center justify-center rounded-full border-2 border-brand/40 bg-brand/10">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-soft">
-              {hasLocation ? <FiMapPin size={22} /> : <FiTarget size={22} />}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="space-y-2 p-4">
-        <p className="text-sm font-bold text-ink">{hasLocation ? locationName || "Restricted attendance area" : "No location selected"}</p>
-        <div className="grid grid-cols-2 gap-2 text-xs text-slate-500">
-          <span>Lat: {latitude || "--"}</span>
-          <span>Lng: {longitude || "--"}</span>
-        </div>
-        <p className="text-xs font-semibold text-brand">Radius: {radius || "--"} meters</p>
-      </div>
     </div>
   );
 }

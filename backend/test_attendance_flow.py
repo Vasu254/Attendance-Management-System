@@ -128,6 +128,28 @@ with app.app_context():
     print(f"  First 5 names: {names}")
     print("  PASSED: Student order and names are preserved")
 
+    # ── Test 8: Google Maps 300m Radius Geofencing Validation ───────────────
+    print("\nTest 8: Google Maps 300m Radius Geofencing Validation")
+    from app.utils.location import distance_in_meters, validate_geofence
+    center_lat, center_lng = 28.613939, 77.209023
+    radius = 300.0
+
+    assert validate_geofence(center_lat, center_lng, radius) is None, "Geofence validation failed for valid coordinates"
+
+    # Close location (~95m away)
+    near_lat, near_lng = 28.614800, 77.209023
+    dist_near = distance_in_meters(center_lat, center_lng, near_lat, near_lng)
+    assert dist_near <= radius, f"Expected {dist_near}m to be <= {radius}m"
+    print(f"  Location near ({round(dist_near, 1)}m) is correctly WITHIN 300m radius")
+
+    # Far location (~500m away)
+    far_lat, far_lng = 28.618400, 77.209023
+    dist_far = distance_in_meters(center_lat, center_lng, far_lat, far_lng)
+    assert dist_far > radius, f"Expected {dist_far}m to be > {radius}m"
+    print(f"  Location far ({round(dist_far, 1)}m) is correctly OUTSIDE 300m radius")
+    print("  PASSED: Google Maps 300m radius geofencing is functioning as expected")
+
     print("\n" + "="*60)
     print("ALL TESTS PASSED — Attendance system is working correctly.")
     print("="*60)
+

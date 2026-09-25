@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { FiCheckCircle, FiCrosshair, FiMapPin, FiRefreshCw } from "react-icons/fi";
 import api from "../../api/axios";
+import GoogleMapGeofence from "../../components/GoogleMapGeofence";
 
 export default function SessionMarkAttendance() {
   const [sessions, setSessions] = useState(null);
@@ -25,8 +26,8 @@ export default function SessionMarkAttendance() {
   const locate = () =>
     navigator.geolocation?.getCurrentPosition(
       (pos) => setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      () => setError("Location access was not granted."),
-      { enableHighAccuracy: true, timeout: 12000 },
+      () => setError("Location access was not granted. Please allow browser location permissions."),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
     );
 
   const mark = async (session) => {
@@ -49,21 +50,21 @@ export default function SessionMarkAttendance() {
     }
   };
 
-  if (!sessions) return <p className="text-sm text-slate-500">Loading active sessions...</p>;
+  if (!sessions) return <p className="text-sm text-slate-500 p-6">Loading active sessions...</p>;
 
   const markable = sessions.filter((s) => s.can_mark);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <section className="surface p-6">
+      <section className="surface p-6 space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-normal text-brand">
               One tap attendance
             </p>
             <h2 className="mt-1 text-2xl font-black text-ink">Active Sessions</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Class and Mentoring attendance are independent. You can mark each eligible session once.
+            <p className="mt-1 text-sm text-slate-500">
+              Class and Mentoring attendance with Google Maps 300m radius geofencing location check.
             </p>
           </div>
           <button className="btn-secondary shrink-0" onClick={load}>
@@ -72,48 +73,61 @@ export default function SessionMarkAttendance() {
         </div>
 
         {result && (
-          <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-800">
+          <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-800">
             ✅ {result}
           </div>
         )}
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-            {error}
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            ❌ {error}
           </div>
         )}
 
         {sessions.some((s) => s.location_required) && (
-          <button className="btn-secondary mt-4" onClick={locate}>
-            <FiCrosshair /> {location ? "✅ Location ready" : "Verify my location"}
-          </button>
+          <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 border border-slate-200/80">
+            <div className="flex items-center gap-2">
+              <FiMapPin className="text-red-500" size={18} />
+              <div>
+                <p className="text-sm font-bold text-ink">Google Maps Geofence Active (300m Radius)</p>
+                <p className="text-xs text-slate-500">
+                  {location
+                    ? `GPS position ready (${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)})`
+                    : "Verify your GPS position to mark attendance"}
+                </p>
+              </div>
+            </div>
+            <button className="btn-secondary shrink-0" onClick={locate}>
+              <FiCrosshair /> {location ? "✅ Location verified" : "Verify my location"}
+            </button>
+          </div>
         )}
 
         {markable.length > 0 && (
-          <div className="mt-5 overflow-hidden rounded-lg border-2 border-teal-300 bg-gradient-to-r from-teal-50 to-emerald-50 p-4">
-            <p className="text-xs font-black uppercase tracking-wider text-teal-600">
+          <div className="overflow-hidden rounded-lg border-2 border-teal-300 bg-gradient-to-r from-teal-50 to-emerald-50 p-4">
+            <p className="text-xs font-black uppercase tracking-wider text-teal-700">
               🟢 {markable.length} session{markable.length > 1 ? "s" : ""} ready to mark
             </p>
           </div>
         )}
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-1">
           {sessions.map((session) => (
             <article
               key={session.id}
-              className={`rounded-lg border-2 p-5 transition ${
+              className={`rounded-2xl border-2 p-6 transition space-y-4 ${
                 session.can_mark
-                  ? "border-teal-300 bg-teal-50/30 shadow-md"
+                  ? "border-teal-300 bg-teal-50/20 shadow-md"
                   : session.session_type === "CLASS"
-                    ? "border-indigo-100 bg-indigo-50/30"
-                    : "border-amber-100 bg-amber-50/30"
+                    ? "border-indigo-100 bg-indigo-50/20"
+                    : "border-amber-100 bg-amber-50/20"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black tracking-normal text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-black text-slate-600">
                     {session.session_type}
-                  </p>
-                  <h3 className="mt-1 text-lg font-black text-ink">
+                  </span>
+                  <h3 className="mt-2 text-xl font-black text-ink">
                     {session.subject || "Attendance session"}
                   </h3>
                   <p className="mt-1 text-sm text-slate-600">
@@ -121,7 +135,7 @@ export default function SessionMarkAttendance() {
                   </p>
                   {session.batch && (
                     <p className="mt-1 text-xs font-bold text-slate-500">
-                      Batch: {session.batch}
+                      Batch: {session.batch} {session.section ? `/ Section ${session.section}` : ""}
                     </p>
                   )}
                 </div>
@@ -133,35 +147,52 @@ export default function SessionMarkAttendance() {
               </div>
 
               {session.location_required && (
-                <p className="mt-4 flex items-center gap-2 text-sm text-slate-600">
-                  <FiMapPin /> Location check required
-                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                    <FiMapPin className="text-red-500" />
+                    <span>Location Permission: {session.location_name || "Campus Location"} (Max {session.radius_meters || 300}m radius)</span>
+                  </div>
+
+                  <GoogleMapGeofence
+                    mode="viewer"
+                    latitude={session.latitude}
+                    longitude={session.longitude}
+                    radiusMeters={session.radius_meters || 300}
+                    locationName={session.location_name}
+                    studentLatitude={location?.latitude}
+                    studentLongitude={location?.longitude}
+                  />
+                </div>
               )}
 
               {session.can_mark ? (
                 <button
-                  className="btn-attendance-blink mt-5 w-full py-3 text-base"
+                  className="btn-attendance-blink w-full py-3.5 text-base font-black"
                   disabled={loading === session.id || (session.location_required && !location)}
                   onClick={() => mark(session)}
                 >
                   <FiCheckCircle size={18} />{" "}
-                  {loading === session.id ? "Marking..." : "MARK ATTENDANCE"}
+                  {loading === session.id
+                    ? "Marking..."
+                    : session.location_required && !location
+                    ? "Verify Location Above to Mark"
+                    : "MARK ATTENDANCE NOW"}
                 </button>
               ) : (
                 <p
-                  className={`mt-5 text-center text-sm font-bold ${
-                    session.already_marked ? "text-teal-700" : "text-slate-500"
+                  className={`py-3 text-center text-sm font-bold rounded-xl bg-white/60 ring-1 ${
+                    session.already_marked ? "text-teal-700 ring-teal-200" : "text-slate-500 ring-slate-200"
                   }`}
                 >
-                  {session.already_marked ? "✅ ATTENDANCE MARKED" : "Attendance unavailable"}
+                  {session.already_marked ? "✅ ATTENDANCE MARKED FOR THIS SESSION" : "Attendance unavailable"}
                 </p>
               )}
             </article>
           ))}
 
           {!sessions.length && (
-            <p className="rounded-lg bg-slate-50 p-5 text-sm text-slate-500 md:col-span-2">
-              No active sessions right now. Sessions will appear here once your teacher activates
+            <p className="rounded-lg bg-slate-50 p-6 text-center text-sm text-slate-500">
+              No active sessions right now. Sessions will appear here once your mentor activates
               attendance for your batch.
             </p>
           )}

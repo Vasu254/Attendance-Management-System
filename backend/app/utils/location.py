@@ -7,11 +7,13 @@ def parse_coordinate(value):
     return float(value)
 
 
-def validate_geofence(latitude, longitude, radius_meters):
+def validate_geofence(latitude, longitude, radius_meters=300.0):
     if latitude is None and longitude is None and radius_meters is None:
         return None
-    if latitude is None or longitude is None or radius_meters is None:
-        return "Latitude, longitude, and radius are required for location restricted attendance"
+    if latitude is None or longitude is None:
+        return "Latitude and longitude are required for location restricted attendance"
+    if radius_meters is None:
+        radius_meters = 300.0
     if not -90 <= latitude <= 90:
         return "Latitude must be between -90 and 90"
     if not -180 <= longitude <= 180:
@@ -21,18 +23,20 @@ def validate_geofence(latitude, longitude, radius_meters):
     return None
 
 
+
 def distance_in_meters(origin_latitude, origin_longitude, target_latitude, target_longitude):
     earth_radius_meters = 6371000
-    origin_latitude = radians(origin_latitude)
-    target_latitude = radians(target_latitude)
-    latitude_delta = radians(target_latitude - origin_latitude)
-    longitude_delta = radians(target_longitude - origin_longitude)
+    lat1 = radians(origin_latitude)
+    lat2 = radians(target_latitude)
+    lat_delta = radians(target_latitude - origin_latitude)
+    lng_delta = radians(target_longitude - origin_longitude)
 
     haversine = (
-        sin(latitude_delta / 2) ** 2
-        + cos(origin_latitude) * cos(target_latitude) * sin(longitude_delta / 2) ** 2
+        sin(lat_delta / 2) ** 2
+        + cos(lat1) * cos(lat2) * sin(lng_delta / 2) ** 2
     )
     return earth_radius_meters * 2 * asin(sqrt(haversine))
+
 
 
 def permission_has_geofence(permission):

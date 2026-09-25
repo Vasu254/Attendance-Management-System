@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { FiAlertCircle, FiCheckCircle, FiCrosshair, FiMapPin, FiNavigation, FiRefreshCw, FiTarget } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiCrosshair, FiMapPin, FiRefreshCw } from "react-icons/fi";
 import api from "../../api/axios";
 import { useAuth } from "../../context/AuthContext";
+import GoogleMapGeofence from "../../components/GoogleMapGeofence";
 
 export default function MarkAttendance() {
   const { user } = useAuth();
@@ -65,14 +66,15 @@ export default function MarkAttendance() {
     }
   };
 
-  if (!permission) return <p className="text-sm text-slate-500">Loading attendance status...</p>;
+  if (!permission) return <p className="text-sm text-slate-500 p-6">Loading attendance status...</p>;
 
   const student = user?.student;
   const today = new Date().toISOString().slice(0, 10);
   const session = permission.permission;
   const locationRequired = Boolean(session?.location_required);
   const distanceMeters = locationRequired && location ? getDistanceMeters(session.latitude, session.longitude, location.latitude, location.longitude) : null;
-  const insideLocation = !locationRequired || (distanceMeters !== null && distanceMeters <= session.radius_meters);
+  const maxRadius = session?.radius_meters || 300;
+  const insideLocation = !locationRequired || (distanceMeters !== null && distanceMeters <= maxRadius);
   const canSubmit = permission.can_mark && (!locationRequired || (location && insideLocation)) && !loading;
 
   return (
@@ -81,13 +83,14 @@ export default function MarkAttendance() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-2xl font-black text-ink">Self Attendance</h2>
+            <p className="mt-1 text-sm text-slate-500">Google Maps location restriction up to {maxRadius}m radius</p>
           </div>
           <div className={`inline-flex w-fit items-center gap-2 rounded-md px-3 py-2 text-sm font-bold ${permission.can_mark ? "bg-teal-50 text-teal-800" : "bg-slate-100 text-slate-600"}`}>
             {permission.can_mark ? <FiCheckCircle /> : <FiAlertCircle />} {permission.can_mark ? "Ready" : "Not Ready"}
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_420px]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_450px]">
           <div className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <Info label="Student Name" value={student?.full_name} />
@@ -106,7 +109,7 @@ export default function MarkAttendance() {
               </div>
             )}
 
-            <button className="btn-primary w-full text-base" disabled={!canSubmit} onClick={mark}>
+            <button className="btn-primary w-full text-base py-3" disabled={!canSubmit} onClick={mark}>
               <FiCheckCircle /> {permission.already_marked ? "ATTENDANCE ALREADY MARKED TODAY" : loading ? "Marking..." : "MARK MY ATTENDANCE"}
             </button>
             {!permission.can_mark && !permission.already_marked && (
@@ -145,36 +148,32 @@ function Info({ label, value }) {
 
 function LocationPanel({ session, location, distanceMeters, insideLocation, loading, error, onRefresh }) {
   const locationRequired = Boolean(session?.location_required);
-  return (
-    <aside className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
-      <div className="relative h-64 bg-[linear-gradient(90deg,#dbeafe_1px,transparent_1px),linear-gradient(0deg,#dbeafe_1px,transparent_1px)] bg-[size:30px_30px]">
-        <div className="absolute inset-0 bg-teal-50/40" />
-        <div className="absolute left-6 top-10 h-8 w-36 rotate-[-22deg] rounded-full bg-white/80" />
-        <div className="absolute bottom-10 right-8 h-9 w-40 rotate-[24deg] rounded-full bg-white/80" />
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
-          <div className={`flex h-36 w-36 items-center justify-center rounded-full border-2 ${insideLocation ? "border-brand/40 bg-brand/10" : "border-red-300 bg-red-50/80"}`}>
-            <div className={`flex h-14 w-14 items-center justify-center rounded-full text-white shadow-soft ${insideLocation ? "bg-brand" : "bg-red-600"}`}>
-              {locationRequired ? <FiMapPin size={24} /> : <FiTarget size={24} />}
-            </div>
-          </div>
-        </div>
-        {location && (
-          <div className="absolute right-[22%] top-[30%] flex h-10 w-10 items-center justify-center rounded-full bg-amber-500 text-white shadow-soft">
-            <FiNavigation size={18} />
-          </div>
-        )}
-      </div>
+  const maxRadius = session?.radius_meters || 300;
 
-      <div className="space-y-4 bg-white p-4">
+  return (
+    <aside className="overflow-hidden rounded-xl border border-slate-200 bg-white space-y-3">
+      {locationRequired && (
+        <GoogleMapGeofence
+          mode="viewer"
+          latitude={session.latitude}
+          longitude={session.longitude}
+          radiusMeters={maxRadius}
+          locationName={session.location_name}
+          studentLatitude={location?.latitude}
+          studentLongitude={location?.longitude}
+        />
+      )}
+
+      <div className="space-y-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-ink">{locationRequired ? session.location_name || "Attendance location" : "Location check not required"}</p>
             <p className="mt-1 text-xs text-slate-500">
-              {locationRequired ? `Allowed radius: ${Math.round(session.radius_meters)} meters` : "This session can be marked without geofence verification."}
+              {locationRequired ? `Allowed radius: ${Math.round(maxRadius)} meters on Google Maps` : "This session can be marked without geofence verification."}
             </p>
           </div>
           {locationRequired && (
-            <button className="btn-secondary px-3" type="button" onClick={onRefresh} disabled={loading} aria-label="Refresh location">
+            <button className="btn-secondary px-3 shrink-0" type="button" onClick={onRefresh} disabled={loading} aria-label="Refresh location">
               {loading ? <FiCrosshair /> : <FiRefreshCw />}
             </button>
           )}
@@ -183,16 +182,16 @@ function LocationPanel({ session, location, distanceMeters, insideLocation, load
         {locationRequired && (
           <>
             <div className={`rounded-md px-3 py-2 text-sm font-bold ${insideLocation ? "bg-teal-50 text-teal-800" : "bg-red-50 text-red-700"}`}>
-              {location ? (insideLocation ? "You are inside the allowed area" : "You are outside the allowed area") : loading ? "Checking your location..." : "Waiting for your location"}
+              {location ? (insideLocation ? `🟢 Inside 300m radius area (${Math.round(distanceMeters)}m away)` : `🔴 Outside allowed area (${Math.round(distanceMeters)}m away - max ${maxRadius}m)`) : loading ? "Checking your GPS location..." : "Waiting for GPS position"}
             </div>
             {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{error}</div>}
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-3">
               <MiniInfo label="Your Lat" value={location ? location.latitude.toFixed(6) : "--"} />
               <MiniInfo label="Your Lng" value={location ? location.longitude.toFixed(6) : "--"} />
               <MiniInfo label="Distance" value={distanceMeters !== null ? `${Math.round(distanceMeters)}m` : "--"} />
             </div>
             <button className="btn-secondary w-full" type="button" onClick={onRefresh} disabled={loading}>
-              <FiCrosshair /> {loading ? "Checking Location..." : "Check My Location"}
+              <FiCrosshair /> {loading ? "Acquiring GPS Position..." : "Verify GPS Location"}
             </button>
           </>
         )}
@@ -203,9 +202,9 @@ function LocationPanel({ session, location, distanceMeters, insideLocation, load
 
 function MiniInfo({ label, value }) {
   return (
-    <div className="rounded-md bg-slate-50 p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-bold text-ink">{value}</p>
+    <div className="rounded-md bg-slate-50 p-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-normal text-slate-500">{label}</p>
+      <p className="mt-0.5 truncate text-xs font-mono font-bold text-ink">{value}</p>
     </div>
   );
 }

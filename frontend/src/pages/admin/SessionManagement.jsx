@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import {
   FiLock, FiPlus, FiUnlock, FiTrash2, FiEye, FiX,
   FiCopy, FiCheck, FiRefreshCw, FiAlertTriangle, FiUsers,
-  FiCalendar, FiClock, FiActivity, FiCheckSquare, FiSquare
+  FiCalendar, FiClock, FiActivity, FiCheckSquare, FiSquare,
+  FiMapPin
 } from "react-icons/fi";
 import api from "../../api/axios";
+import GoogleMapGeofence from "../../components/GoogleMapGeofence";
 
 const today = new Date().toISOString().slice(0, 10);
 const nowHour = new Date().getHours();
@@ -13,8 +15,20 @@ const defaultStart = `${pad(nowHour)}:00`;
 const defaultEnd = `${pad((nowHour + 2) % 24)}:00`;
 
 const blank = {
-  session_date: today, start_time: defaultStart, end_time: defaultEnd,
-  session_type: "CLASS", batch: "", section: "", subject: "", room: "", mentor_id: ""
+  session_date: today,
+  start_time: defaultStart,
+  end_time: defaultEnd,
+  session_type: "CLASS",
+  batch: "",
+  section: "",
+  subject: "",
+  room: "",
+  mentor_id: "",
+  enable_location: false,
+  location_name: "",
+  latitude: "",
+  longitude: "",
+  radius_meters: "300",
 };
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
@@ -75,7 +89,7 @@ export default function SessionManagement() {
   const [detailData, setDetailData]       = useState(null);
 
   // Delete confirmation state
-  const [deleteTarget, setDeleteTarget] = useState(null); // session object
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]         = useState(false);
 
   // Copy state
@@ -111,8 +125,14 @@ export default function SessionManagement() {
       await api.post("/admin/sessions", {
         ...form,
         mentor_id: form.mentor_id ? Number(form.mentor_id) : null,
-        batch: form.batch || null, section: form.section || null,
-        subject: form.subject || null, room: form.room || null,
+        batch: form.batch || null,
+        section: form.section || null,
+        subject: form.subject || null,
+        room: form.room || null,
+        location_name: form.enable_location ? (form.location_name || "Campus Location") : null,
+        latitude: form.enable_location ? (form.latitude || null) : null,
+        longitude: form.enable_location ? (form.longitude || null) : null,
+        radius_meters: form.enable_location ? (form.radius_meters || "300") : null,
       });
       setMessage("Session created successfully! Activate it when ready for attendance.");
       setForm(blank);
@@ -179,7 +199,7 @@ export default function SessionManagement() {
       <div className="surface p-5">
         <p className="text-sm font-bold uppercase tracking-wider text-brand">Session Management</p>
         <h1 className="mt-1 text-2xl font-black text-ink">Class &amp; Mentoring Sessions</h1>
-        <p className="mt-1 text-sm text-slate-500">Create sessions, manage attendance windows, and view or delete session records.</p>
+        <p className="mt-1 text-sm text-slate-500">Create sessions with Google Maps location permissions up to 300m radius, manage windows, and track attendance.</p>
       </div>
 
       {/* ── Toasts ── */}
@@ -215,8 +235,8 @@ export default function SessionManagement() {
 
       {/* ════════════════════ CREATE TAB ════════════════════ */}
       {tab === "create" && (
-        <section className="surface p-6">
-          <h2 className="mb-5 text-lg font-black text-ink">New Session</h2>
+        <section className="surface p-6 space-y-6">
+          <h2 className="text-lg font-black text-ink">New Session</h2>
           <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" onSubmit={create}>
             <Field label="Date" type="date" value={form.session_date} onChange={(v) => setForm({ ...form, session_date: v })} />
             <label>
@@ -247,6 +267,81 @@ export default function SessionManagement() {
                 {mentors.filter((m) => m.is_active).map((m) => <option key={m.id} value={m.id}>{m.username}</option>)}
               </select>
             </label>
+
+            {/* ── Location & Google Maps Geofence Section ── */}
+            <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-slate-200 bg-slate-50/80 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                    <FiMapPin size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-ink">Google Maps Geofence Permission (300m Radius)</h3>
+                    <p className="text-xs text-slate-500">Enforce classroom attendance by requiring students to be within up to 300 meters radius on Google Maps.</p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={form.enable_location}
+                    onChange={(e) => setForm({ ...form, enable_location: e.target.checked })}
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                </label>
+              </div>
+
+              {form.enable_location && (
+                <div className="space-y-4 pt-2 border-t border-slate-200/60">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Location / Campus Name"
+                      placeholder="e.g. Main Auditorium, Block B, Lab 3"
+                      value={form.location_name}
+                      onChange={(v) => setForm({ ...form, location_name: v })}
+                      required={false}
+                    />
+                    <div>
+                      <label className="label">Allowed Geofence Radius (Meters)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          className="field flex-1"
+                          value={form.radius_meters}
+                          onChange={(e) => setForm({ ...form, radius_meters: e.target.value })}
+                          placeholder="300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setForm({ ...form, radius_meters: "300" })}
+                          className="rounded-lg bg-teal-100 text-teal-800 font-bold text-xs px-3 py-2 hover:bg-teal-200 shrink-0"
+                        >
+                          Preset 300m Radius
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <GoogleMapGeofence
+                    mode="picker"
+                    latitude={form.latitude}
+                    longitude={form.longitude}
+                    radiusMeters={form.radius_meters}
+                    locationName={form.location_name}
+                    onChange={(loc) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        latitude: loc.latitude,
+                        longitude: loc.longitude,
+                        radius_meters: loc.radius_meters,
+                        location_name: loc.location_name,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+            </div>
+
             <button type="submit" className="btn-primary md:col-span-2 xl:col-span-4">
               <FiPlus /> Create {form.session_type === "CLASS" ? "Class" : form.session_type === "MENTORING" ? "Mentoring" : "Other"} Session
             </button>
@@ -305,7 +400,7 @@ export default function SessionManagement() {
       {detailOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-end" role="dialog" aria-modal="true">
           <button className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setDetailOpen(false)} aria-label="Close" />
-          <div className="relative z-10 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
+          <div className="relative z-10 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl overflow-y-auto">
             {/* Modal header */}
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
@@ -331,7 +426,7 @@ export default function SessionManagement() {
 
             {/* Loading */}
             {detailLoading && (
-              <div className="flex flex-1 items-center justify-center gap-3 text-slate-400">
+              <div className="flex flex-1 items-center justify-center gap-3 text-slate-400 py-16">
                 <FiRefreshCw className="animate-spin" size={20} />
                 <span className="text-sm font-semibold">Loading attendance…</span>
               </div>
@@ -354,6 +449,20 @@ export default function SessionManagement() {
                     color="indigo"
                   />
                 </div>
+
+                {/* Google Maps View if location permission set */}
+                {detailData.session.location_required && (
+                  <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-3">Google Maps Session Location Permission (300m Radius)</h3>
+                    <GoogleMapGeofence
+                      mode="viewer"
+                      latitude={detailData.session.latitude}
+                      longitude={detailData.session.longitude}
+                      radiusMeters={detailData.session.radius_meters || 300}
+                      locationName={detailData.session.location_name}
+                    />
+                  </div>
+                )}
 
                 {/* Copy tools */}
                 <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-6 py-3">
@@ -399,35 +508,22 @@ export default function SessionManagement() {
                         <th className="px-3 py-3 text-xs font-black uppercase tracking-wider text-slate-400">Time</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {detailData.students.map((s, idx) => (
-                        <tr key={s.id} className={s.status === "ABSENT" ? "bg-red-50/40" : ""}>
-                          <td className="px-6 py-3 text-xs font-bold text-slate-400">{idx + 1}</td>
-                          <td className="px-3 py-3 font-semibold text-ink">{s.full_name}</td>
-                          <td className="px-3 py-3 text-slate-500">{s.student_id}</td>
+                    <tbody className="divide-y divide-slate-100">
+                      {detailData.students?.map((s, idx) => (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                          <td className="px-6 py-3 text-xs text-slate-400">{idx + 1}</td>
+                          <td className="px-3 py-3 font-bold text-ink">{s.full_name || s.student_id}</td>
+                          <td className="px-3 py-3 font-mono text-xs text-slate-500">{s.student_id}</td>
                           <td className="px-3 py-3">
                             <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${statusBadge(s.status)}`}>
-                              {s.status.replace("_", " ")}
+                              {s.status}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-slate-500">{s.marked_time || "—"}</td>
+                          <td className="px-3 py-3 font-mono text-xs text-slate-500">{s.marked_time || "—"}</td>
                         </tr>
                       ))}
-                      {detailData.students.length === 0 && (
-                        <tr><td colSpan="5" className="py-12 text-center text-sm text-slate-400">No eligible students found for this session.</td></tr>
-                      )}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Footer */}
-                <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-6 py-4">
-                  <button
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-red-600 ring-1 ring-red-200 hover:bg-red-50 transition"
-                    onClick={() => { setDeleteTarget(detailData.session); setDetailOpen(false); }}
-                  >
-                    <FiTrash2 size={15} /> Delete this session
-                  </button>
                 </div>
               </>
             )}
@@ -435,45 +531,24 @@ export default function SessionManagement() {
         </div>
       )}
 
-      {/* ════════════════════ DELETE CONFIRMATION ════════════════════ */}
+      {/* Delete Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} aria-label="Cancel" />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-100">
-                <FiAlertTriangle className="text-red-600" size={20} />
-              </div>
-              <div>
-                <p className="font-black text-ink">Delete Session?</p>
-                <p className="text-xs text-slate-500 mt-0.5">This action cannot be undone.</p>
-              </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <FiAlertTriangle size={24} />
             </div>
-            <div className="mb-5 rounded-lg bg-slate-50 p-4 text-sm text-slate-600 ring-1 ring-slate-200">
-              <p className="font-bold text-ink">{deleteTarget.subject || "Untitled Session"}</p>
-              <p className="mt-1">{deleteTarget.session_date} · {deleteTarget.start_time}–{deleteTarget.end_time}</p>
-              <p className="mt-1">
-                <span className={`rounded-full px-2 py-0.5 text-xs font-black ${sessionTypeBadge(deleteTarget.session_type)}`}>
-                  {deleteTarget.session_type}
-                </span>
-                {deleteTarget.batch && <span className="ml-2 text-xs text-slate-500">Batch: {deleteTarget.batch}</span>}
-              </p>
-              <p className="mt-3 text-xs font-bold text-red-600">
-                ⚠ All attendance records for this session will also be permanently deleted.
-                Other sessions and their attendance records will not be affected.
+            <div>
+              <h3 className="text-lg font-black text-ink">Delete Session?</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Are you sure you want to delete session <span className="font-bold text-ink">"{deleteTarget.subject || "Untitled"}"</span> on {deleteTarget.session_date}? This will permanently remove its attendance records.
               </p>
             </div>
-            <div className="flex gap-3">
-              <button className="btn-secondary flex-1" onClick={() => setDeleteTarget(null)} disabled={deleting}>
-                Cancel
-              </button>
-              <button
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-red-700 transition disabled:opacity-60"
-                onClick={confirmDelete}
-                disabled={deleting}
-              >
-                <FiTrash2 size={14} />
-                {deleting ? "Deleting…" : "Yes, Delete Session"}
+            <div className="flex justify-end gap-3 pt-2">
+              <button className="btn-secondary" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn-primary bg-red-600 hover:bg-red-700" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? "Deleting..." : "Delete Session"}
               </button>
             </div>
           </div>
@@ -504,6 +579,12 @@ function SessionRow({ session, tab, onView, onActivate, onClose, onDelete }) {
           <span className="flex items-center gap-1"><FiClock size={11} /> {session.start_time}–{session.end_time}</span>
           {session.batch && <span>Batch: {session.batch}{session.section ? ` / ${session.section}` : ""}</span>}
           {session.room && <span>{session.room}</span>}
+          {session.location_required && (
+            <span className="flex items-center gap-1 font-bold text-teal-700 bg-teal-50 ring-1 ring-teal-200 px-2 py-0.5 rounded-full">
+              <FiMapPin size={11} className="text-red-500" />
+              Google Maps Geofence ({session.radius_meters ? Math.round(session.radius_meters) : 300}m)
+            </span>
+          )}
         </div>
       </div>
 

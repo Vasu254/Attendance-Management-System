@@ -98,6 +98,11 @@ def list_sessions():
 def create_session():
     data = request.get_json() or {}
     try:
+        lat = parse_coordinate(data.get("latitude"))
+        lng = parse_coordinate(data.get("longitude"))
+        rad = parse_coordinate(data.get("radius_meters"))
+        if (lat is not None or lng is not None) and rad is None:
+            rad = 300.0
         session = AttendanceSession(
             session_date=parse_date(data.get("session_date") or data.get("attendance_date")),
             start_time=parse_time(data.get("start_time")), end_time=parse_time(data.get("end_time")),
@@ -105,8 +110,8 @@ def create_session():
             batch=(data.get("batch") or None), section=(data.get("section") or None),
             subject=(data.get("subject") or None), room=(data.get("room") or None),
             mentor_id=data.get("mentor_id") or current_actor_id(), created_by=current_actor_id(),
-            location_name=(data.get("location_name") or None), latitude=parse_coordinate(data.get("latitude")),
-            longitude=parse_coordinate(data.get("longitude")), radius_meters=parse_coordinate(data.get("radius_meters")),
+            location_name=(data.get("location_name") or None), latitude=lat,
+            longitude=lng, radius_meters=rad,
         )
     except (TypeError, ValueError):
         return jsonify({"message": "Enter a valid date, time, session type, and location."}), 400
@@ -578,6 +583,8 @@ def create_attendance_permission():
         latitude = parse_coordinate(data.get("latitude"))
         longitude = parse_coordinate(data.get("longitude"))
         radius_meters = parse_coordinate(data.get("radius_meters"))
+        if (latitude is not None or longitude is not None) and radius_meters is None:
+            radius_meters = 300.0
     except (TypeError, ValueError):
         return jsonify({"message": "Invalid location coordinates"}), 400
 
